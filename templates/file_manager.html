@@ -5,12 +5,12 @@
     <h1 class="text-3xl font-bold mb-4 text-white">Gerenciador de Arquivos ✨</h1>
 
     <div class="mb-4 text-white">
-        <!-- Mostra o caminho atual completo UwU -->
+        
         <p class="text-gray-200">Caminho atual:
             <code class="bg-gray-700 px-2 py-1 rounded text-sm">{{ current_path or '/' }}</code>
         </p>
 
-        <!-- Botãozinho de voltar, só aparece se não for o diretório raiz nyan~ -->
+        
         {% if parent_path is not none %}
         <a href="{{ url_for('file_manager', path=parent_path) }}"
             class="text-blue-400 hover:underline text-sm">⬅️ Voltar</a>

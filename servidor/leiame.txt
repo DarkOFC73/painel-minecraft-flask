@@ -1,0 +1,1 @@
+se você tiver um servidor (funcional, de preferência) copie todos os arquivos dele pra ca.

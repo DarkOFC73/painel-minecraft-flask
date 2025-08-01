@@ -51,12 +51,12 @@ def check_server_status(host='127.0.0.1', port=25565):
 def get_player_count():
     try:
         with MCRcon(RCON_HOST, RCON_PASSWORD, port=int(RCON_PORT)) as mcr:
-            response = mcr.command("list")  # exemplo: "There are §c1§6 of a max of §a20§6 players online: Steve"
-            clean_response = re.sub(r"§.", "", response)  # remove todos os códigos tipo §c, §a, etc
+            response = mcr.command("list")  
+            clean_response = re.sub(r"§.", "", response)  
 
             if "There are" in clean_response:
                 parts = clean_response.split()
-                count = int(parts[2])  # agora deve ser só "1"
+                count = int(parts[2])  
                 return count
     except Exception as e:
         print(f"[erro RCON get_player_count]: {e}")
@@ -75,7 +75,7 @@ def render_file_manager(subpath):
             "is_dir": os.path.isdir(full_path)
         })
 
-    # 🪜 Gera o caminho do diretório anterior
+    
     parent_path = os.path.dirname(subpath).replace("\\", "/")
     if subpath.strip() == "":
         parent_path = None
@@ -100,7 +100,7 @@ def is_server_running():
             continue
     return False
 
-#initial server_state
+
 server_state = "ligado" if is_server_running() else "desligado"
 
 def start_server():
@@ -112,15 +112,15 @@ def start_server():
         global server_state
         try:
             proc = subprocess.Popen(
-                ["java", "-Xmx1024M", "-Xms1024M", "-jar", JAR_NAME, "nogui"],
+                ["java", "-Xmx2048M", "-Xms2048M", "-jar", JAR_NAME, "nogui"],
                 cwd=SERVER_DIR,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
             print("[DEBUG] Processo Java iniciado, PID:", proc.pid)
 
-            # Tenta detectar que o servidor subiu
-            for i in range(20):  # tenta por até 20 segundos
+            
+            for i in range(20):  
                 time.sleep(1)
                 if is_server_running():
                     server_state = "ligado"
@@ -281,9 +281,9 @@ def file_manager(path):
     normalized_path = os.path.normpath(unquote(path))
     full_path = os.path.abspath(os.path.join(safe_base, normalized_path))
 
-    # 🚨 Bloqueia acesso fora do SERVER_DIR
+    # Bloqueia acesso fora do SERVER_DIR
     if not full_path.startswith(safe_base):
-        abort(403)  # Acesso proibido!
+        abort(403)
 
     if not os.path.exists(full_path):
         abort(404)
@@ -297,7 +297,7 @@ def file_manager(path):
             "is_dir": os.path.isdir(os.path.join(full_path, entry))
         })
 
-    # 🪜 Garante que não volte além do root
+    
     parent_path = os.path.dirname(normalized_path).replace("\\", "/") if normalized_path else None
 
     return render_template("file_manager.html",
@@ -410,7 +410,7 @@ def upload():
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
 
-        # Usa a função nova aqui UwU
+        
         plugin_dir = os.path.join(SERVER_DIR, "plugins/update" if is_server_running() else "plugins")
         os.makedirs(plugin_dir, exist_ok=True)
 

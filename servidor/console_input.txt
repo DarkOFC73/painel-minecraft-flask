@@ -1,0 +1,3 @@
+/op DarkOFC73
+echo $SHELL
+/say test

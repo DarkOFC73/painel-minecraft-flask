@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6 text-white">
+    <h1 class="text-3xl font-bold mb-4">Logs em Tempo Real ✨</h1>
+
+    <pre id="logArea" class="bg-gray-900 text-green-300 p-4 rounded shadow h-96 overflow-y-auto text-sm">
+        Carregando logs... 🌀
+    </pre>
+
+    <form method="POST" action="/send" class="mt-6 flex space-x-4">
+        <input name="command" type="text" placeholder="Digite o comando RCON" class="flex-grow p-2 rounded bg-gray-800 text-white border border-gray-600 focus:outline-none" />
+        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded">Enviar</button>
+    </form>
+</div>
+
+<script>
+    function updateLogs() {
+        fetch("/stream_logs")
+            .then(response => response.json())
+            .then(data => {
+                const logArea = document.getElementById("logArea");
+                logArea.textContent = data.join("");
+                logArea.scrollTop = logArea.scrollHeight;
+            })
+            .catch(err => {
+                console.error("Erro ao buscar logs:", err);
+            });
+    }
+
+    setInterval(updateLogs, 3000); // Atualiza a cada 3 segundos
+    updateLogs(); // Primeira chamada
+</script>
+{% endblock %}

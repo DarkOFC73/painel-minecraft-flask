@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <h1 class="text-3xl font-bold mb-4 text-white">Gerenciador de Arquivos ✨</h1>
+
+    <div class="mb-4 text-white">
+        <!-- Mostra o caminho atual completo UwU -->
+        <p class="text-gray-200">Caminho atual:
+            <code class="bg-gray-700 px-2 py-1 rounded text-sm">{{ current_path or '/' }}</code>
+        </p>
+
+        <!-- Botãozinho de voltar, só aparece se não for o diretório raiz nyan~ -->
+        {% if parent_path is not none %}
+        <a href="{{ url_for('file_manager', path=parent_path) }}"
+            class="text-blue-400 hover:underline text-sm">⬅️ Voltar</a>
+        {% endif %}
+    </div>
+
+    <table class="table-auto w-full bg-gray-800 rounded shadow overflow-hidden text-white">
+        <thead class="bg-gray-700">
+            <tr>
+                <th class="px-4 py-2 text-left">Nome</th>
+                <th class="px-4 py-2 text-center">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for file in files %}
+                <tr class="border-t border-gray-700">
+                    <td class="px-4 py-2">
+                        {% if file.is_dir %}
+                            <a href="{{ url_for('file_manager', path=file.path) }}"
+                               class="text-purple-400 hover:underline font-semibold">📁 {{ file.name }}</a>
+                        {% else %}
+                            <span class="text-gray-300">📄 {{ file.name }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-2 space-x-2 text-center">
+                        {% if not file.is_dir %}
+                            <a href="{{ url_for('edit_file') }}?path={{ file.path | urlencode }}"
+                               class="text-green-400 hover:underline">✏️ Editar</a>
+                            <a href="{{ url_for('download_file', subpath=file.path | urlencode) }}"
+                               class="text-blue-400 hover:underline">⬇️ Baixar</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

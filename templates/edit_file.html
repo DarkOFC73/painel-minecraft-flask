@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mx-auto px-4 py-6 text-white">
+    <h1 class="text-2xl font-bold mb-4">Editando: {{ file_path }}</h1>
+
+    <form method="POST" action="{{ url_for('edit_file') }}?path={{ file_path | urlencode }}">
+        <textarea name="content" class="w-full h-96 bg-gray-900 text-white p-4 rounded border border-gray-700">
+{{ content }}</textarea>
+        <div class="mt-4 flex space-x-4">
+            <button type="submit" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-white font-bold">💾 Salvar</button>
+            <a href="{{ url_for('file_manager', path=parent_path) }}" class="text-blue-400 hover:underline mt-2">⬅️ Voltar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -23,7 +23,7 @@ Um painel web simples e fofinho 💖 para gerenciar um servidor de Minecraft dir
 ## 📦 Requisitos
 - Python **3.9+**
 - Java (17+) instalado e configurado no `PATH`
-- Servidor de Minecraft configurado (tem um servidor vazio so pra testes incluso no git)
+- Servidor de Minecraft configurado (se ja tiver um, mova-o pra pasta "servidor")
 - RCON ativado no `server.properties`
 
 ## 🚀 Instalação

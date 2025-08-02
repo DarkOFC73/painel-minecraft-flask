@@ -6,18 +6,24 @@ from werkzeug.utils import secure_filename
 from mcrcon import MCRcon
 import psutil
 import shutil
-import socket
 import json
 import re
 from pathlib import Path
 from urllib.parse import unquote
 import logging
 import requests
+import schedule
+import atexit
+# 6 da manhã.
+
+# Configuração de logging para reduzir os debugs
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
 load_dotenv()
-#isso tá uma bagunça...
-# nem me fale.
+
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY") #or "senha123"
+app.secret_key = os.getenv("SECRET_KEY") or "senha123"
 SERVER_DIR = os.path.abspath("servidor") + "/"
 JAR_NAME = os.getenv("JAR_NAME") or "server.jar"
 PLAYIT_PATH = os.getenv("PLAYIT_PATH") or "./playit/playit-linux"
@@ -26,12 +32,21 @@ ALLOWED_EXTENSIONS = {"jar", "zip", "txt", "json", "cfg"}
 FILE_ROOT = os.path.abspath(SERVER_DIR)
 status_info = {"running": False, "players": []}
 RCON_HOST = "127.0.0.1"
-RCON_PASSWORD = os.getenv("RCON_PASSWORD") 
+RCON_PASSWORD = os.getenv("RCON_PASSWORD") or "meowmeow"
 RCON_PORT = int(os.getenv("RCON_PORT") or 25575)
+
 # Configurações do Playit.gg
 PLAYIT_API_KEY = os.getenv("PLAYIT_API_KEY") or ""
 PLAYIT_TUNNEL_ID = os.getenv("PLAYIT_TUNNEL_ID") or ""
 PLAYIT_AGENT_PATH = os.getenv("PLAYIT_AGENT_PATH") or "./playit-agent"
+
+# Configurações de Backup Automático
+AUTO_BACKUP_ENABLED = os.getenv("AUTO_BACKUP_ENABLED", "false").lower() == "true"
+AUTO_BACKUP_INTERVAL = int(os.getenv("AUTO_BACKUP_INTERVAL", "3600"))  # segundos
+AUTO_BACKUP_KEEP = int(os.getenv("AUTO_BACKUP_KEEP", "5"))
+
+# Variável global para o job do backup
+backup_job = None
 
 # --- Funções auxiliares ---
 def send_rcon_command(command):
@@ -59,24 +74,8 @@ def get_player_count():
                 count = int(parts[2])  
                 return count
     except Exception as e:
-        print(f"[erro RCON get_player_count]: {e}")
+        pass  # Removido o print de erro para não poluir o painel
     return 0
-
-def render_file_manager(subpath):
-    current_path = os.path.join(SERVER_DIR, subpath)
-    if not os.path.exists(current_path):
-        return "Diretório não encontrado", 404
-    files = []
-    for name in os.listdir(current_path):
-        full_path = os.path.join(current_path, name)
-        files.append({
-            "name": name,
-            "is_dir": os.path.isdir(full_path)
-        })
-    parent_path = os.path.dirname(subpath).replace("\\", "/")
-    if subpath.strip() == "":
-        parent_path = None
-    return render_template("file_manager.html", files=files, subpath=subpath, parent_path=parent_path)
 
 def get_full_path(subpath):
     full = os.path.abspath(os.path.join(FILE_ROOT, subpath))
@@ -87,7 +86,6 @@ def get_full_path(subpath):
 def is_server_running():
     for proc in psutil.process_iter(['name', 'cmdline']):
         try:
-            print(f"[DEBUG] Vendo processo: {proc.info['name']}, cmdline: {proc.info['cmdline']}")
             if proc.info['name'] and 'java' in proc.info['name'].lower():
                 if any(JAR_NAME.lower() in str(arg).lower() for arg in proc.info['cmdline']):
                     return True
@@ -100,7 +98,6 @@ server_state = "ligado" if is_server_running() else "desligado"
 def start_server():
     global server_state
     server_state = "ligando"
-    print("[DEBUG] Estado alterado para 'ligando'")
     def run():
         global server_state
         try:
@@ -110,26 +107,20 @@ def start_server():
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
-            print("[DEBUG] Processo Java iniciado, PID:", proc.pid)
             for i in range(20):  
                 time.sleep(1)
                 if is_server_running():
                     server_state = "ligado"
-                    print("[DEBUG] Estado alterado para 'ligado'")
                     break
                 else:
-                    print(f"[DEBUG] Tentativa {i+1}: servidor ainda não detectado...")
+                    pass  # Removido o print de debug
             else:
                 server_state = "desligado"
-                print("[DEBUG] Não foi possível detectar o servidor em 20s")
             proc.wait()
-            print("[DEBUG] Processo Java terminou")
         except Exception as e:
-            print(f"[start_server error]: {e}")
             server_state = "desligado"
         finally:
             server_state = "desligado"
-            print("[DEBUG] Estado alterado para 'desligado' no finally")
     threading.Thread(target=run, daemon=True).start()
 
 def stop_server():
@@ -147,20 +138,82 @@ def stop_server():
                 proc.terminate()
                 proc.wait(timeout=10)
         except Exception as e:
-            print(f"[stop_server] erro: {e}")
+            pass  # Removido o print de erro
     server_state = "desligado"
 
-def get_satus():
-    return status_info
-
 def backup_world():
-    backup_path = os.path.join(SERVER_DIR, "world_backup.zip")
-    with zipfile.ZipFile(backup_path, 'w') as z:
-        for root, dirs, files in os.walk(os.path.join(SERVER_DIR, "world", "world_nether", "world_the_end")):
-            for file in files:
-                abs_path = os.path.join(root, file)
-                z.write(abs_path, os.path.relpath(abs_path, SERVER_DIR))
-    return backup_path
+    """Realiza backup do mundo do servidor"""
+    try:
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        backup_filename = f"world_backup_{timestamp}.zip"
+        backup_path = os.path.join(SERVER_DIR, backup_filename)
+        
+        with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as z:
+            world_path = os.path.join(SERVER_DIR, "world")
+            if os.path.exists(world_path):
+                for root, dirs, files in os.walk(world_path):
+                    for file in files:
+                        abs_path = os.path.join(root, file)
+                        arc_path = os.path.relpath(abs_path, SERVER_DIR)
+                        z.write(abs_path, arc_path)
+        return backup_path
+    except Exception as e:
+        print(f"[ERRO] Backup falhou: {e}")
+        return None
+
+def cleanup_old_backups():
+    """Remove backups antigos mantendo apenas os mais recentes"""
+    try:
+        import glob
+        backup_pattern = os.path.join(SERVER_DIR, "world_backup_*.zip")
+        backups = glob.glob(backup_pattern)
+        backups.sort(key=os.path.getmtime, reverse=True)
+        
+        for old_backup in backups[AUTO_BACKUP_KEEP:]:
+            try:
+                os.remove(old_backup)
+                print(f"[BACKUP] Backup antigo removido: {os.path.basename(old_backup)}")
+            except Exception as e:
+                print(f"[ERRO] Falha ao remover backup {old_backup}: {e}")
+    except Exception as e:
+        print(f"[ERRO] Falha na limpeza de backups: {e}")
+
+def automated_backup():
+    """Função que executa o backup automático"""
+    if not AUTO_BACKUP_ENABLED:
+        return
+        
+    print("[BACKUP] Iniciando backup automático...")
+    backup_path = backup_world()
+    if backup_path:
+        print(f"[BACKUP] Backup concluído: {os.path.basename(backup_path)}")
+        cleanup_old_backups()
+    else:
+        print("[ERRO] Falha no backup automático")
+
+def start_backup_scheduler():
+    """Inicia o agendador de backups automáticos"""
+    global backup_job
+    
+    if AUTO_BACKUP_ENABLED and AUTO_BACKUP_INTERVAL > 0:
+        # Cancelar job anterior se existir
+        if backup_job:
+            schedule.cancel_job(backup_job)
+        
+        # Agendar novo backup
+        backup_job = schedule.every(AUTO_BACKUP_INTERVAL).seconds.do(automated_backup)
+        
+        def run_scheduler():
+            while True:
+                schedule.run_pending()
+                time.sleep(1)
+        
+        # Rodar em thread separada
+        scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+        scheduler_thread.start()
+        print(f"[BACKUP] Agendador iniciado - Backup a cada {AUTO_BACKUP_INTERVAL} segundos")
+    else:
+        print("[BACKUP] Backup automático desativado")
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -218,27 +271,7 @@ def get_playit_tunnel_info(tunnel_id):
         print(f"[Playit API] Erro ao obter info do túnel {tunnel_id}: {e}")
         return None
 
-def create_playit_tunnel(name="Minecraft Server", local_port=25565, protocol="tcp"):
-    """Cria um novo túnel no Playit.gg"""
-    if not PLAYIT_API_KEY:
-        return None, "API Key não configurada"
-    
-    try:
-        headers = get_playit_api_headers()
-        data = {
-            "name": name,
-            "localPort": local_port,
-            "protocol": protocol,
-            "tunnelType": "minecraft-java"
-        }
-        response = requests.post("https://api.playit.gg/tunnels", headers=headers, json=data, timeout=10)
-        if response.status_code == 200:
-            return response.json().get("data"), "Túnel criado com sucesso"
-        else:
-            return None, f"Erro na API: {response.text}"
-    except Exception as e:
-        return None, f"Erro ao criar túnel: {e}"
-
+# Funções do agente local do Playit.gg
 def get_playit_agent_status():
     """Verifica se o agente do Playit está rodando localmente"""
     try:
@@ -270,7 +303,7 @@ def list_players():
 
 def read_logs():
     if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, "r") as f:
+        with open(LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
             return f.read()
     return "Sem logs ainda, nya~"
 
@@ -291,7 +324,7 @@ def status_json():
         if server_state != "desligando":
             server_state = "desligado"
     
-    # Obter status do Playit
+    # Verificar status do Playit
     playit_agent_status = get_playit_agent_status()
     
     # Obter informações da API do Playit (se configurada)
@@ -309,7 +342,7 @@ def status_json():
 @app.route("/stream_logs")
 def stream_logs():
     try:
-        with open(LOG_FILE, "r", encoding="utf-8") as f:
+        with open(LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
         return jsonify(lines[-50:])
     except Exception as e:
@@ -317,6 +350,9 @@ def stream_logs():
 
 @app.route("/send_command", methods=["POST"])
 def send_command():
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
     command = request.form.get("command", "")
     if command.strip() == "":
         flash("Comando vazio, nyan! (>_<)")
@@ -331,6 +367,9 @@ def redirect_files():
 
 @app.route("/edit", methods=["GET", "POST"])
 def edit_file():
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
     relative_path = request.args.get("path")
     if not relative_path:
         abort(404)
@@ -349,17 +388,19 @@ def edit_file():
         relative_dir_path = os.path.relpath(os.path.dirname(file_path), SERVER_DIR)
         redirect_path = relative_dir_path if relative_dir_path != "." else ""
         return redirect(url_for("file_manager", path=redirect_path))
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         content = f.read()
     return render_template("edit_file.html", file_path=file_path, parent_path=parent_path, content=content)
 
 @app.route("/files/", defaults={"path": ""})
 @app.route("/files/<path:path>")
 def file_manager(path):
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
     safe_base = os.path.abspath(SERVER_DIR)
     normalized_path = os.path.normpath(unquote(path))
     full_path = os.path.abspath(os.path.join(safe_base, normalized_path))
-    # Bloqueia acesso fora do SERVER_DIR
     if not full_path.startswith(safe_base):
         abort(403)
     if not os.path.exists(full_path):
@@ -370,7 +411,8 @@ def file_manager(path):
         entries.append({
             "name": entry,
             "path": entry_path.replace("\\", "/"),
-            "is_dir": os.path.isdir(os.path.join(full_path, entry))
+            "is_dir": os.path.isdir(os.path.join(full_path, entry)),
+            "size": os.path.getsize(os.path.join(full_path, entry)) if not os.path.isdir(os.path.join(full_path, entry)) else 0
         })
     parent_path = os.path.dirname(normalized_path).replace("\\", "/") if normalized_path else None
     return render_template("file_manager.html",
@@ -381,16 +423,26 @@ def file_manager(path):
 
 @app.route("/download/<path:subpath>")
 def download_file(subpath):
-    abs_path = get_full_path(subpath)
-    dir_name = os.path.dirname(abs_path)
-    filename = os.path.basename(abs_path)
-    return send_from_directory(dir_name, filename, as_attachment=True)
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
+    try:
+        abs_path = get_full_path(subpath)
+        dir_name = os.path.dirname(abs_path)
+        filename = os.path.basename(abs_path)
+        return send_from_directory(dir_name, filename, as_attachment=True)
+    except Exception as e:
+        flash(f"Erro ao baixar arquivo: {e}")
+        return redirect(url_for('file_manager', path=os.path.dirname(subpath)))
 
 @app.route("/view/<path:subpath>")
 def view_file(subpath):
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
     try:
         abs_path = get_full_path(subpath)
-        with open(abs_path, encoding="utf-8") as f:
+        with open(abs_path, encoding="utf-8", errors="ignore") as f:
             content = f.read()
         return render_template("view_file.html", content=content, path=subpath)
     except Exception as e:
@@ -398,31 +450,43 @@ def view_file(subpath):
 
 @app.route("/delete/<path:subpath>", methods=["POST"])
 def delete_file(subpath):
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
     try:
         abs_path = get_full_path(subpath)
         if os.path.isfile(abs_path):
             os.remove(abs_path)
+            flash(f"Arquivo {os.path.basename(subpath)} deletado com sucesso!", "success")
         elif os.path.isdir(abs_path):
             shutil.rmtree(abs_path)
-        return redirect(url_for("file_manager", subpath=os.path.dirname(subpath)))
+            flash(f"Pasta {os.path.basename(subpath)} deletada com sucesso!", "success")
+        return redirect(url_for("file_manager", path=os.path.dirname(subpath)))
     except Exception as e:
-        return f"Erro ao excluir: {e}", 500
+        flash(f"Erro ao excluir: {e}", "error")
+        return redirect(url_for("file_manager", path=os.path.dirname(subpath)))
 
 @app.route("/upload/<path:subpath>", methods=["POST"])
 def upload_file(subpath):
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
     try:
         file = request.files["file"]
-        filename = secure_filename(file.filename)
-        upload_path = get_full_path(os.path.join(subpath, filename))
-        file.save(upload_path)
-        return redirect(url_for("file_manager", subpath=subpath))
+        if file and file.filename:
+            filename = secure_filename(file.filename)
+            upload_path = get_full_path(os.path.join(subpath, filename))
+            file.save(upload_path)
+            flash(f"Arquivo {filename} enviado com sucesso!", "success")
+        return redirect(url_for("file_manager", path=subpath))
     except Exception as e:
-        return f"Erro ao enviar: {e}", 500
+        flash(f"Erro ao enviar: {e}", "error")
+        return redirect(url_for("file_manager", path=subpath))
 
 @app.route("/get_logs")
 def get_logs():
     try:
-        with open(os.path.join(SERVER_DIR, "logs/latest.log"), "r", encoding="utf-8") as f:
+        with open(os.path.join(SERVER_DIR, "logs/latest.log"), "r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
         return content
     except FileNotFoundError:
@@ -452,33 +516,47 @@ def index():
                           playit_agent_status=playit_agent_status,
                           playit_account_info=playit_account_info,
                           playit_tunnel_info=playit_tunnel_info,
-                          playit_tunnels=playit_tunnels)
+                          playit_tunnels=playit_tunnels,
+                          auto_backup_enabled=AUTO_BACKUP_ENABLED,
+                          auto_backup_interval=AUTO_BACKUP_INTERVAL,
+                          auto_backup_keep=AUTO_BACKUP_KEEP)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         if request.form["password"] == os.getenv("PASSWORD"):
             session["auth"] = True
+            flash("Login realizado com sucesso!", "success")
             return redirect("/")
+        else:
+            flash("Senha incorreta!", "error")
     return render_template("login.html")
 
 @app.route("/logout")
 def logout():
     session.clear()
+    flash("Você foi desconectado!", "info")
     return redirect("/login")
 
 @app.route('/start', methods=['POST'])
 def start():
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
     if not is_server_running():
         start_server()
-        return "Servidor iniciado com sucesso! OwO"
-    return "Servidor já está rodando! UwU"
+        flash("Servidor iniciado com sucesso! OwO", "success")
+    else:
+        flash("Servidor já está rodando! UwU", "info")
     return redirect(url_for('index'))
 
 @app.route('/stop', methods=['POST'])
 def stop():
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
     stop_server()
-    return redirect("/")
+    flash("Servidor parado com sucesso!", "success")
     return redirect(url_for('index'))
 
 @app.route('/status', methods=['GET'])
@@ -499,53 +577,70 @@ def status():
 
 @app.route("/backup")
 def backup():
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
     path = backup_world()
-    return send_file(path, as_attachment=True)
+    if path and os.path.exists(path):
+        flash("Backup realizado com sucesso!", "success")
+        cleanup_old_backups()
+        return send_file(path, as_attachment=True)
+    else:
+        flash("Erro ao realizar backup!", "error")
+        return redirect(url_for('index'))
 
 @app.route("/upload", methods=["POST"])
 def upload():
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
     if "file" not in request.files:
-        return "No file part"
+        flash("Nenhum arquivo selecionado!", "error")
+        return redirect("/")
     file = request.files["file"]
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         plugin_dir = os.path.join(SERVER_DIR, "plugins/update" if is_server_running() else "plugins")
         os.makedirs(plugin_dir, exist_ok=True)
         file.save(os.path.join(plugin_dir, filename))
+        flash(f"Arquivo {filename} enviado com sucesso!", "success")
         return redirect("/")
-    return "Invalid file"
+    else:
+        flash("Tipo de arquivo não permitido!", "error")
+        return redirect("/")
 
 @app.route("/console", methods=["POST"])
 def console():
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
     cmd = request.form.get("command")
     if cmd:
         try:
-            with MCRcon("127.0.0.1", "meowmeow", port=25575) as mcr:
+            with MCRcon("127.0.0.1", RCON_PASSWORD, port=25575) as mcr:
                 resp = mcr.command(cmd)
                 return f"<pre>{resp}</pre>"
         except Exception as e:
             return f"Erro ao enviar comando: {e}"
     return "Nenhum comando enviado."
 
-@app.route("/files")
-def files():
-    files = os.listdir(SERVER_DIR)
-    return jsonify(files)
-
 @app.route("/logs")
 def logs():
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
     return render_template("logs.html", content=read_logs())
 
 @app.route("/send", methods=["POST"])
 def send():
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
     cmd = request.form.get("command")
     if cmd:
         run_command(cmd)
+        flash("Comando enviado para o console!", "success")
     return redirect("/logs")
-
-@app.route("/refresh", methods=["GET"])
-def refresh_status():
-    return redirect(url_for("index"))
 
 # --- Rotas para Playit.gg ---
 @app.route('/playit/start', methods=['POST'])
@@ -577,55 +672,47 @@ def playit_status_api():
     status = get_playit_agent_status()
     return jsonify({"status": status})
 
-@app.route('/playit/api/tunnels')
-def playit_api_tunnels():
-    """Rota para obter túneis via API"""
+# --- Rotas para Backup Automático ---
+@app.route('/backup/auto/run', methods=['POST'])
+def manual_auto_backup():
+    """Rota para executar backup manual através do backup automático"""
     if not session.get('auth'):
-        return jsonify({"error": "Não autorizado"}), 401
+        return redirect(url_for('login'))
     
-    if not PLAYIT_API_KEY:
-        return jsonify({"error": "API Key não configurada"}), 400
+    try:
+        backup_path = backup_world()
+        if backup_path:
+            cleanup_old_backups()
+            flash("Backup automático executado com sucesso!", "success")
+        else:
+            flash("Erro ao executar backup automático", "error")
+    except Exception as e:
+        flash(f"Erro ao executar backup: {e}", "error")
     
-    tunnels = get_playit_tunnels()
-    return jsonify(tunnels)
+    return redirect(url_for('index'))
 
-@app.route('/playit/api/tunnel/<tunnel_id>')
-def playit_api_tunnel_info(tunnel_id):
-    """Rota para obter informações de um túnel específico"""
+@app.route('/backup/auto/toggle', methods=['POST'])
+def backup_auto_toggle():
+    """Rota para ativar/desativar backup automático"""
     if not session.get('auth'):
-        return jsonify({"error": "Não autorizado"}), 401
+        return redirect(url_for('login'))
     
-    if not PLAYIT_API_KEY:
-        return jsonify({"error": "API Key não configurada"}), 400
+    global AUTO_BACKUP_ENABLED
+    AUTO_BACKUP_ENABLED = not AUTO_BACKUP_ENABLED
     
-    tunnel_info = get_playit_tunnel_info(tunnel_id)
-    if tunnel_info:
-        return jsonify(tunnel_info)
-    else:
-        return jsonify({"error": "Túnel não encontrado"}), 404
-
-@app.route('/playit/api/create_tunnel', methods=['POST'])
-def playit_api_create_tunnel():
-    """Rota para criar um novo túnel"""
-    if not session.get('auth'):
-        return jsonify({"error": "Não autorizado"}), 401
+    # Reiniciar scheduler
+    start_backup_scheduler()
     
-    if not PLAYIT_API_KEY:
-        return jsonify({"error": "API Key não configurada"}), 400
+    status = "ativado" if AUTO_BACKUP_ENABLED else "desativado"
+    flash(f"Backup automático {status} com sucesso!", "success")
     
-    name = request.form.get('name', 'Minecraft Server')
-    local_port = int(request.form.get('local_port', 25565))
-    protocol = request.form.get('protocol', 'tcp')
-    
-    tunnel_info, message = create_playit_tunnel(name, local_port, protocol)
-    if tunnel_info:
-        return jsonify({"success": True, "tunnel": tunnel_info, "message": message})
-    else:
-        return jsonify({"success": False, "message": message}), 400
+    return redirect(url_for('index'))
 
 if __name__ == "__main__":
-    log = logging.getLogger('werkzeug')
-    log.setLevel(logging.ERROR)
-    app.run(host="0.0.0.0", port=5000)
-
-  # Why are you crying Lain?
+    # Iniciar agendador de backups quando a aplicação começar
+    start_backup_scheduler()
+    
+    # Registrar função para limpar ao sair
+    atexit.register(lambda: print("Aplicação encerrada"))
+    
+    app.run(host="0.0.0.0", port=5000, debug=False)

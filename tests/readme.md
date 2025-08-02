@@ -15,8 +15,8 @@ Um painel web simples e fofinho 💖 para gerenciar um servidor de Minecraft dir
 ## 🔜 Coisas a serem adicionadas
 - [x] Opção pra deletar arquivos (pretendo adicionar pra sair com o release do playit)
 - [x] Integração com Playit.gg
-- [ ] Backup automático
-- [ ] Configuração mais fácil
+- [x] Backup automático
+- [ ] Configuração mais fácil (não sei como fazer isso :/)
 
 ## 📦 Requisitos
 - Python **3.9+**

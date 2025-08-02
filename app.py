@@ -150,7 +150,7 @@ def get_satus():
 def backup_world():
     backup_path = os.path.join(SERVER_DIR, "world_backup.zip")
     with zipfile.ZipFile(backup_path, 'w') as z:
-        for root, dirs, files in os.walk(os.path.join(SERVER_DIR, "world")):
+        for root, dirs, files in os.walk(os.path.join(SERVER_DIR, "world", "world_nether", "world_the_end")):
             for file in files:
                 abs_path = os.path.join(root, file)
                 z.write(abs_path, os.path.relpath(abs_path, SERVER_DIR))
@@ -159,6 +159,7 @@ def backup_world():
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+#sem uso atualmente, poderia ser util?
 def get_playit_status():
     try:
         result = subprocess.check_output(["pgrep", "-af", "playit"])

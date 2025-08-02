@@ -2,6 +2,8 @@
 
 Um painel web simples e fofinho 💖 para gerenciar um servidor de Minecraft diretamente do navegador, feito com Python + Flask.
 
+[🇺🇸 En-US translation here!](README-en.md)
+
 > isso **provavelmente** não deveria funcionar, mas funciona. - O criador desse projeto
 
 ## ✨ Funcionalidades

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-3xl font-bold flex items-center">
+            <i class="fas fa-file-code text-blue-400 mr-3"></i> Visualizando: {{ path }}
+        </h1>
+        <a href="{{ url_for('file_manager', path=path.rsplit('/', 1)[0]) }}" 
+           class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition flex items-center">
+            <i class="fas fa-arrow-left mr-2"></i> Voltar
+        </a>
+    </div>
+
+    <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 shadow-lg overflow-hidden">
+        <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+            <div class="text-sm text-gray-400">
+                <i class="fas fa-file-alt mr-1"></i> {{ path }}
+            </div>
+            <div class="flex space-x-2">
+                <a href="{{ url_for('download_file', subpath=path) }}" 
+                   class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm flex items-center">
+                    <i class="fas fa-download mr-1"></i> Baixar
+                </a>
+                <a href="{{ url_for('edit_file', path=path) }}" 
+                   class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm flex items-center">
+                    <i class="fas fa-edit mr-1"></i> Editar
+                </a>
+            </div>
+        </div>
+        <div class="overflow-auto max-h-[calc(100vh-200px)]">
+            <pre class="p-4 text-sm text-green-400 bg-gray-900 font-mono whitespace-pre-wrap break-words">{{ content }}</pre>
+        </div>
+        <div class="p-4 border-t border-gray-700 text-sm text-gray-500">
+            <i class="fas fa-info-circle mr-1"></i> Este é um modo de visualização somente leitura
+        </div>
+    </div>
+</div>
+{% endblock %}

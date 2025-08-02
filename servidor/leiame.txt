@@ -1,2 +1,8 @@
+PT:
 se você tiver um servidor (funcional, de preferência) copie todos os arquivos dele pra ca.
 troque o nome do .jar pra server.jar (ou se não, mude o codigo pra usar o nome do seu jar caso preferir por algum motivo)
+
+
+EN:
+if you already have a server (a working one, preferably) copy the files to here.
+change the .jar name to server.jar (or change the code to use your jar name if you prefer for some reason)

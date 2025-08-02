@@ -1,1 +1,2 @@
 se você tiver um servidor (funcional, de preferência) copie todos os arquivos dele pra ca.
+troque o nome do .jar pra server.jar (ou se não, mude o codigo pra usar o nome do seu jar caso preferir por algum motivo)

@@ -13,8 +13,10 @@ from pathlib import Path
 from urllib.parse import unquote
 import logging
 load_dotenv()
+
+#isso tá uma bagunça...
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY") or "senha123"
+app.secret_key = os.getenv("SECRET_KEY") #or "senha123"
 SERVER_DIR = os.path.abspath("servidor") + "/"
 JAR_NAME = os.getenv("JAR_NAME") or "server.jar"
 PLAYIT_PATH = os.getenv("PLAYIT_PATH") or "./playit/playit-linux"
@@ -23,8 +25,9 @@ ALLOWED_EXTENSIONS = {"jar", "zip", "txt", "json", "cfg"}
 FILE_ROOT = os.path.abspath(SERVER_DIR)
 status_info = {"running": False, "players": []}
 RCON_HOST = "127.0.0.1"
-RCON_PASSWORD = "meowmeow"
+RCON_PASSWORD = os.getenv("RCON_PASSWORD") 
 RCON_PORT = int(os.getenv("RCON_PORT") or 25575)
+
 # --- Funções auxiliares ---
 def send_rcon_command(command):
     try:
@@ -33,12 +36,14 @@ def send_rcon_command(command):
         return response
     except Exception as e:
         return f"Erro ao enviar comando: {e}"
+
 def check_server_status(host='127.0.0.1', port=25565):
     try:
         with socket.create_connection((host, port), timeout=1):
             return True
     except Exception:
         return False
+
 def get_player_count():
     try:
         with MCRcon(RCON_HOST, RCON_PASSWORD, port=int(RCON_PORT)) as mcr:
@@ -51,6 +56,7 @@ def get_player_count():
     except Exception as e:
         print(f"[erro RCON get_player_count]: {e}")
     return 0
+
 def render_file_manager(subpath):
     current_path = os.path.join(SERVER_DIR, subpath)
     if not os.path.exists(current_path):
@@ -66,11 +72,13 @@ def render_file_manager(subpath):
     if subpath.strip() == "":
         parent_path = None
     return render_template("file_manager.html", files=files, subpath=subpath, parent_path=parent_path)
+
 def get_full_path(subpath):
     full = os.path.abspath(os.path.join(FILE_ROOT, subpath))
     if not full.startswith(FILE_ROOT):
         raise ValueError("Path traversal detected!")
     return full
+
 def is_server_running():
     for proc in psutil.process_iter(['name', 'cmdline']):
         try:
@@ -81,6 +89,7 @@ def is_server_running():
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return False
+
 server_state = "ligado" if is_server_running() else "desligado"
 def start_server():
     global server_state
@@ -116,6 +125,7 @@ def start_server():
             server_state = "desligado"
             print("[DEBUG] Estado alterado para 'desligado' no finally")
     threading.Thread(target=run, daemon=True).start()
+
 def stop_server():
     global server_state
     server_state = "desligando"
@@ -133,8 +143,10 @@ def stop_server():
         except Exception as e:
             print(f"[stop_server] erro: {e}")
     server_state = "desligado"
+
 def get_satus():
     return status_info
+
 def backup_world():
     backup_path = os.path.join(SERVER_DIR, "world_backup.zip")
     with zipfile.ZipFile(backup_path, 'w') as z:
@@ -143,27 +155,32 @@ def backup_world():
                 abs_path = os.path.join(root, file)
                 z.write(abs_path, os.path.relpath(abs_path, SERVER_DIR))
     return backup_path
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 def get_playit_status():
     try:
         result = subprocess.check_output(["pgrep", "-af", "playit"])
         return "Online" if b"playit" in result else "Offline"
     except:
         return "Offline"
+
 def list_players():
     return status_info["players"]
+
 def read_logs():
     if os.path.exists(LOG_FILE):
         with open(LOG_FILE, "r") as f:
             return f.read()
     return "Sem logs ainda, nya~"
+
 def run_command(cmd):
-    # Supondo que o servidor esteja rodando em screen ou você queira mandar via stdin (precisa ajustar para seu caso)
     input_file = os.path.join(SERVER_DIR, "console_input.txt")
     with open(input_file, "a") as f:
         f.write(cmd + "\n")
     return True
+
 # --- Rotas ---
 @app.route("/status_json")
 def status_json():
@@ -178,14 +195,16 @@ def status_json():
         "status": server_state,
         "players": get_player_count() if server_state == "ligado" else 0
     })
+
 @app.route("/stream_logs")
 def stream_logs():
     try:
         with open(LOG_FILE, "r", encoding="utf-8") as f:
             lines = f.readlines()
-        return jsonify(lines[-50:])  # Retorna as últimas 50 linhas
+        return jsonify(lines[-50:])
     except Exception as e:
         return jsonify([f"[Erro ao ler log]: {e}"])
+
 @app.route("/send_command", methods=["POST"])
 def send_command():
     command = request.form.get("command", "")
@@ -195,9 +214,11 @@ def send_command():
     output = send_rcon_command(command)
     flash(f"Resultado: {output}")
     return redirect(url_for("logs"))
+
 @app.route("/files")
 def redirect_files():
     return redirect("/files/")
+
 @app.route("/edit", methods=["GET", "POST"])
 def edit_file():
     relative_path = request.args.get("path")
@@ -221,6 +242,7 @@ def edit_file():
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
     return render_template("edit_file.html", file_path=file_path, parent_path=parent_path, content=content)
+
 @app.route("/files/", defaults={"path": ""})
 @app.route("/files/<path:path>")
 def file_manager(path):
@@ -246,12 +268,14 @@ def file_manager(path):
                            current_path=normalized_path,
                            parent_path=parent_path,
                            SERVER_DIR=safe_base)
+
 @app.route("/download/<path:subpath>")
 def download_file(subpath):
     abs_path = get_full_path(subpath)
     dir_name = os.path.dirname(abs_path)
     filename = os.path.basename(abs_path)
     return send_from_directory(dir_name, filename, as_attachment=True)
+
 @app.route("/view/<path:subpath>")
 def view_file(subpath):
     try:
@@ -261,6 +285,7 @@ def view_file(subpath):
         return render_template("view_file.html", content=content, path=subpath)
     except Exception as e:
         return f"Erro ao ler o arquivo: {e}", 500
+
 @app.route("/delete/<path:subpath>", methods=["POST"])
 def delete_file(subpath):
     try:
@@ -272,6 +297,7 @@ def delete_file(subpath):
         return redirect(url_for("file_manager", subpath=os.path.dirname(subpath)))
     except Exception as e:
         return f"Erro ao excluir: {e}", 500
+
 @app.route("/upload/<path:subpath>", methods=["POST"])
 def upload_file(subpath):
     try:
@@ -282,6 +308,7 @@ def upload_file(subpath):
         return redirect(url_for("file_manager", subpath=subpath))
     except Exception as e:
         return f"Erro ao enviar: {e}", 500
+
 @app.route("/get_logs")
 def get_logs():
     try:
@@ -290,11 +317,13 @@ def get_logs():
         return content
     except FileNotFoundError:
         return "Log file not found."
+
 @app.route("/")
 def index():
     server_online = is_server_running()
     player_count = get_player_count() if server_online else 0
     return render_template("index.html",server_online=server_online, server_state=server_state, player_count=player_count)
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -302,10 +331,12 @@ def login():
             session["auth"] = True
             return redirect("/")
     return render_template("login.html")
+
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/login")
+
 @app.route('/start', methods=['POST'])
 def start():
     if not is_server_running():
@@ -313,21 +344,25 @@ def start():
         return "Servidor iniciado com sucesso! OwO"
     return "Servidor já está rodando! UwU"
     return redirect(url_for('index'))
+
 @app.route('/stop', methods=['POST'])
 def stop():
     stop_server()
     return redirect("/")
     return redirect(url_for('index'))
+
 @app.route('/status', methods=['GET'])
 def status():
     return jsonify({
         "status": "online" if is_server_running() else "offline",
         "player_count": get_player_count()
     })
+
 @app.route("/backup")
 def backup():
     path = backup_world()
     return send_file(path, as_attachment=True)
+
 @app.route("/upload", methods=["POST"])
 def upload():
     if "file" not in request.files:
@@ -340,6 +375,7 @@ def upload():
         file.save(os.path.join(plugin_dir, filename))
         return redirect("/")
     return "Invalid file"
+
 @app.route("/console", methods=["POST"])
 def console():
     cmd = request.form.get("command")
@@ -351,19 +387,23 @@ def console():
         except Exception as e:
             return f"Erro ao enviar comando: {e}"
     return "Nenhum comando enviado."
+
 @app.route("/files")
 def files():
     files = os.listdir(SERVER_DIR)
     return jsonify(files)
+
 @app.route("/logs")
 def logs():
     return render_template("logs.html", content=read_logs())
+
 @app.route("/send", methods=["POST"])
 def send():
     cmd = request.form.get("command")
     if cmd:
         run_command(cmd)
     return redirect("/logs")
+
 @app.route("/refresh", methods=["GET"])
 def refresh_status():
     return redirect(url_for("index"))

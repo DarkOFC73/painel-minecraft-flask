@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel do Servidor Minecraft</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gradient-to-br from-gray-900 to-gray-800 text-white min-h-screen">
+  <div class="max-w-7xl mx-auto p-4">
+    <!-- Cabeçalho -->
+    <header class="mb-6">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 py-4 border-b border-gray-700">
+        <div>
+          <h1 class="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            Painel Minecraft
+          </h1>
+          <p class="text-gray-400 text-sm">Gerencie seu servidor com facilidade</p>
+        </div>
+        
+        <!-- Informações do usuário/logado -->
+        <div class="flex items-center space-x-4">
+          {% if session.auth %}
+            <span class="text-green-400 text-sm">
+              <i class="fas fa-user-circle"></i> Usuário
+            </span>
+            <a href="{{ url_for('logout') }}" class="text-red-400 hover:text-red-300 text-sm flex items-center">
+              <i class="fas fa-sign-out-alt mr-1"></i> Sair
+            </a>
+          {% else %}
+            <span class="text-yellow-400 text-sm">
+              <i class="fas fa-lock"></i> Não autenticado
+            </span>
+          {% endif %}
+        </div>
+      </div>
+      
+      <!-- Menu de navegação -->
+      {% if session.auth %}
+      <nav class="mt-4">
+        <div class="flex flex-wrap gap-2">
+          <a href="{{ url_for('index') }}" class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition flex items-center">
+            <i class="fas fa-home mr-2"></i> Início
+          </a>
+          <a href="{{ url_for('logs') }}" class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition flex items-center">
+            <i class="fas fa-terminal mr-2"></i> Logs
+          </a>
+          <a href="{{ url_for('file_manager', path='') }}" class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition flex items-center">
+            <i class="fas fa-folder mr-2"></i> Arquivos
+          </a>
+          <a href="{{ url_for('backup') }}" class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition flex items-center">
+            <i class="fas fa-save mr-2"></i> Backup
+          </a>
+        </div>
+      </nav>
+      {% endif %}
+    </header>
+    
+    <!-- Mensagens flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="mb-6">
+          {% for category, message in messages %}
+            <div class="p-4 rounded-lg mb-2 flex items-center {% if category == 'error' %}bg-red-900/50 border border-red-700{% elif category == 'success' %}bg-green-900/50 border border-green-700{% elif category == 'info' %}bg-blue-900/50 border border-blue-700{% else %}bg-gray-800 border border-gray-600{% endif %}">
+              {% if category == 'error' %}
+                <i class="fas fa-exclamation-circle text-red-400 mr-2"></i>
+              {% elif category == 'success' %}
+                <i class="fas fa-check-circle text-green-400 mr-2"></i>
+              {% elif category == 'info' %}
+                <i class="fas fa-info-circle text-blue-400 mr-2"></i>
+              {% else %}
+                <i class="fas fa-bell text-gray-400 mr-2"></i>
+              {% endif %}
+              <span>{{ message }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    
+    <!-- Conteúdo principal -->
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+    
+    <!-- Rodapé -->
+    <footer class="mt-12 pt-6 border-t border-gray-800 text-center text-gray-500 text-sm">
+      <p>Desenvolvido com ❤️ por DarkOFC73 e henryykkkk</p>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mx-auto px-4 py-6 text-white">
+    <h1 class="text-3xl font-bold mb-4">Painel Principal ✨</h1>
+    
+    <!-- Status do Servidor -->
+    <div id="status-servidor" class="p-4 rounded shadow bg-gray-800 text-white mb-6">
+        ⏳ Verificando status do servidor...
+    </div>
+    
+    <!-- Status do Playit.gg -->
+    <div id="status-playit" class="p-4 rounded shadow bg-gray-800 text-white mb-6">
+        ⏳ Verificando status do Playit.gg...
+    </div>
+    
+    <!-- Botões de ação do Servidor -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <form action="/start" method="post">
+            <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded text-center">
+                🟢 Iniciar Servidor
+            </button>
+        </form>
+        <form action="/stop" method="post">
+            <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded text-center">
+                🔴 Parar Servidor
+            </button>
+        </form>
+        <a href="/files/" class="w-full text-center bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">
+            📁 Gerenciador de Arquivos
+        </a>
+        <a href="/backup" class="w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            💾 Fazer Backup
+        </a>
+    </div>
+    
+    <!-- Controles do Playit.gg -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <form action="/playit/start" method="post">
+            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded text-center">
+                🌐 Iniciar Playit.gg
+            </button>
+        </form>
+        <form action="/playit/stop" method="post">
+            <button type="submit" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded text-center">
+                🛑 Parar Playit.gg
+            </button>
+        </form>
+    </div>
+    
+    <!-- Informações da API do Playit (se configurada) -->
+    <div id="playit-api-info" class="bg-gray-800 p-4 rounded shadow mb-6" style="display: none;">
+        <h2 class="text-xl font-bold mb-2">📡 Informações do Playit.gg</h2>
+        <div id="playit-account-info"></div>
+        <div id="playit-tunnel-info"></div>
+    </div>
+    
+    <!-- Upload de Arquivo -->
+    <form action="/upload" method="post" enctype="multipart/form-data" class="bg-gray-800 p-4 rounded shadow">
+        <label for="fileInput" class="block text-white font-bold mb-2">Upload de Arquivo</label>
+        <div class="flex items-center space-x-4">
+            <label for="fileInput" class="cursor-pointer bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+                📁 Escolher Arquivo
+            </label>
+            <span id="fileName" class="text-white">Nenhum arquivo selecionado.</span>
+        </div>
+        <input id="fileInput" name="file" type="file" class="hidden" onchange="updateFileName()" />
+        <button type="submit" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
+            ⬆️ Enviar
+        </button>
+    </form>
+</div>
+
+<script>
+    function updateFileName() {
+        const input = document.getElementById("fileInput");
+        const fileNameSpan = document.getElementById("fileName");
+        fileNameSpan.textContent = input.files.length > 0 ? input.files[0].name : "Nenhum arquivo selecionado.";
+    }
+    
+    function atualizarStatus() {
+        fetch("/status_json")
+            .then(res => res.json())
+            .then(data => {
+                // Status do servidor
+                const el = document.getElementById("status-servidor");
+                let bg = "bg-gray-800";
+                let texto = "❔ Desconhecido";
+                switch (data.status) {
+                    case "ligado":
+                        bg = "bg-green-800";
+                        texto = `🟢 Ligado<br>🎮 Jogadores Online: <strong>${data.players}</strong>`;
+                        break;
+                    case "desligado":
+                        bg = "bg-red-800";
+                        texto = "🔴 Desligado";
+                        break;
+                    case "ligando":
+                        bg = "bg-yellow-600";
+                        texto = "🟡 Ligando...";
+                        break;
+                    case "desligando":
+                        bg = "bg-gray-600";
+                        texto = "⚪ Desligando...";
+                        break;
+                }
+                el.className = "p-4 rounded shadow text-white mb-6 " + bg;
+                el.innerHTML = `<p class="text-xl font-semibold">Status do Servidor:<br><span class="font-bold">${texto}</span></p>`;
+                
+                // Status do Playit
+                const playitEl = document.getElementById("status-playit");
+                let playitBg = "bg-gray-800";
+                let playitTexto = "❔ Desconhecido";
+                if (data.playit_agent_status === "Online") {
+                    playitBg = "bg-green-800";
+                    playitTexto = "🌐 Playit.gg Agent: <strong>Online</strong>";
+                } else {
+                    playitBg = "bg-red-800";
+                    playitTexto = "🌐 Playit.gg Agent: <strong>Offline</strong>";
+                }
+                playitEl.className = "p-4 rounded shadow text-white mb-6 " + playitBg;
+                playitEl.innerHTML = `<p class="text-xl font-semibold">${playitTexto}</p>`;
+                
+                // Informações da API do Playit
+                if (data.playit_tunnel_info) {
+                    const apiInfoEl = document.getElementById("playit-api-info");
+                    const tunnelInfoEl = document.getElementById("playit-tunnel-info");
+                    apiInfoEl.style.display = "block";
+                    
+                    if (data.playit_tunnel_info.tunnel) {
+                        const tunnel = data.playit_tunnel_info.tunnel;
+                        tunnelInfoEl.innerHTML = `
+                            <h3 class="font-bold mt-2">Túnel: ${tunnel.name}</h3>
+                            <p>🔗 Link: <strong>${tunnel.customDomain || tunnel.playitDomain}</strong></p>
+                            <p>📍 Porta: <strong>${tunnel.localPort}</strong></p>
+                            <p>📊 Status: <strong>${tunnel.status}</strong></p>
+                        `;
+                    }
+                }
+            });
+    }
+    
+    setInterval(atualizarStatus, 2000);
+    window.onload = atualizarStatus;
+</script>
+{% endblock %}

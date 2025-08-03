@@ -12,7 +12,7 @@
     </div>
 
     <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 shadow-lg overflow-hidden">
-        <form method="POST" action="{{ url_for('edit_file') }}?path={{ file_path | urlencode }}" class="h-full flex flex-col">
+        <form method="POST" action="{{ url_for('edit_file', path=file_path) }}" class="h-full flex flex-col">
             <div class="p-4 border-b border-gray-700">
                 <button type="submit" 
                         class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition flex items-center">
@@ -41,7 +41,7 @@
 document.addEventListener('keydown', function(e) {
     if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
-        document.querySelector('form').dispatchEvent(new Event('submit'));
+        document.querySelector('form').submit();
     }
 });
 </script>

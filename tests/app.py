@@ -86,30 +86,17 @@ def write_env_file(env_vars):
     
     # Template do arquivo .env com comentários
     env_template = """# Configurações do Painel Minecraft
-# Chave secreta para sessões (gere uma aleatória)
 SECRET_KEY={SECRET_KEY}
-
-# Senha para acessar o painel
 PASSWORD={PASSWORD}
-
-# Diretório onde está o servidor Minecraft
 SERVER_DIR={SERVER_DIR}
-
-# Nome do arquivo JAR do servidor
 JAR_NAME={JAR_NAME}
-
-# Caminho para o executável do Playit
 PLAYIT_PATH={PLAYIT_PATH}
-
-# Configurações RCON
 RCON_PASSWORD={RCON_PASSWORD}
 RCON_PORT={RCON_PORT}
-
 # Configurações do Playit.gg (opcionais)
 PLAYIT_API_KEY={PLAYIT_API_KEY}
 PLAYIT_TUNNEL_ID={PLAYIT_TUNNEL_ID}
 PLAYIT_AGENT_PATH={PLAYIT_AGENT_PATH}
-
 # Configurações de Backup Automático
 AUTO_BACKUP_ENABLED={AUTO_BACKUP_ENABLED}
 AUTO_BACKUP_INTERVAL={AUTO_BACKUP_INTERVAL}
@@ -608,10 +595,13 @@ def edit_file():
     relative_path = request.args.get("path")
     if not relative_path:
         abort(404)
+    
     file_path = os.path.abspath(os.path.join(SERVER_DIR, relative_path.lstrip("/\\")))
     if not file_path.startswith(os.path.abspath(SERVER_DIR)) or not os.path.isfile(file_path):
         abort(404)
-    parent_path = str(Path(file_path).parent)
+    
+    parent_dir_relative = os.path.dirname(relative_path) if os.path.dirname(relative_path) != "." else ""
+    
     if request.method == "POST":
         content = request.form.get("content", "")
         try:
@@ -620,12 +610,17 @@ def edit_file():
             flash("Arquivo salvo com sucesso! (≧◡≦) ♡")
         except Exception as e:
             flash(f"Erro ao salvar arquivo: {e}")
-        relative_dir_path = os.path.relpath(os.path.dirname(file_path), SERVER_DIR)
-        redirect_path = relative_dir_path if relative_dir_path != "." else ""
-        return redirect(url_for("file_manager", path=redirect_path))
+        
+        return redirect(url_for("file_manager", path=parent_dir_relative))
+    
+    
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         content = f.read()
-    return render_template("edit_file.html", file_path=file_path, parent_path=parent_path, content=content)
+    
+    return render_template("edit_file.html", 
+                          file_path=relative_path,  
+                          parent_path=parent_dir_relative, 
+                          content=content)
 
 @app.route("/files/", defaults={"path": ""})
 @app.route("/files/<path:path>")

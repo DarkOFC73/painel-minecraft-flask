@@ -1,100 +1,229 @@
 {% extends "base.html" %}
-
 {% block content %}
-<div class="container mx-auto px-4 py-6 text-white">
-    <h1 class="text-3xl font-bold mb-4">Painel Principal ✨</h1>
-
-        <!-- Bloco de status dinâmico -->
-        <div id="status-servidor" class="p-4 rounded shadow bg-gray-800 text-white mb-6">
-            ⏳ Verificando status do servidor...
+<div class="container mx-auto px-4 py-6">
+    <h1 class="text-3xl font-bold mb-6 text-center">📊 Dashboard do Servidor</h1>
+    
+    <!-- Cards de status -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Status do Servidor -->
+        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg">
+            <div class="flex items-center">
+                <div class="p-3 rounded-lg bg-blue-500/20 mr-4">
+                    <i class="fas fa-server text-blue-400 text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-gray-400 text-sm">Status do Servidor</p>
+                    <p class="text-xl font-bold {% if server_state == 'ligado' %}text-green-400{% elif server_state == 'desligado' %}text-red-400{% else %}text-yellow-400{% endif %}">
+                        {% if server_state == 'ligado' %}🟢 Online
+                        {% elif server_state == 'desligado' %}🔴 Offline
+                        {% elif server_state == 'ligando' %}🟡 Iniciando
+                        {% elif server_state == 'desligando' %}⚪ Parando
+                        {% else %}❓ Desconhecido{% endif %}
+                    </p>
+                </div>
+            </div>
         </div>
-
-        <!-- Botões de ação -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <form action="/start" method="post">
-                <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded text-center">
-                    🟢 Iniciar Servidor
+        
+        <!-- Jogadores Online -->
+        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg">
+            <div class="flex items-center">
+                <div class="p-3 rounded-lg bg-green-500/20 mr-4">
+                    <i class="fas fa-users text-green-400 text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-gray-400 text-sm">Jogadores Online</p>
+                    <p class="text-xl font-bold text-green-400">{{ player_count }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Status do Playit -->
+        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg">
+            <div class="flex items-center">
+                <div class="p-3 rounded-lg bg-purple-500/20 mr-4">
+                    <i class="fas fa-globe text-purple-400 text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-gray-400 text-sm">Playit.gg</p>
+                    <p class="text-xl font-bold {% if playit_agent_status == 'Online' %}text-green-400{% else %}text-red-400{% endif %}">
+                        {% if playit_agent_status == 'Online' %}🟢 Online{% else %}🔴 Offline{% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Backup Automático -->
+        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg">
+            <div class="flex items-center">
+                <div class="p-3 rounded-lg bg-yellow-500/20 mr-4">
+                    <i class="fas fa-clock text-yellow-400 text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-gray-400 text-sm">Backup</p>
+                    <p class="text-xl font-bold {% if auto_backup_enabled %}text-green-400{% else %}text-gray-400{% endif %}">
+                        {% if auto_backup_enabled %}🟢 Ativo{% else %}⚪ Inativo{% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Controles do Servidor -->
+    <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg mb-8">
+        <h2 class="text-2xl font-bold mb-4 flex items-center">
+            <i class="fas fa-power-off mr-2 text-purple-400"></i> Controles do Servidor
+        </h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form action="{{ url_for('start') }}" method="post">
+                <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition flex items-center justify-center">
+                    <i class="fas fa-play mr-2"></i> Iniciar Servidor
                 </button>
             </form>
-            <form action="/stop" method="post">
-                <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded text-center">
-                    🔴 Parar Servidor
+            <form action="{{ url_for('stop') }}" method="post">
+                <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition flex items-center justify-center">
+                    <i class="fas fa-stop mr-2"></i> Parar Servidor
                 </button>
             </form>
-            <a href="/files/" class="w-full text-center bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">
-                📁 Gerenciador de Arquivos
-            </a>
-            <a href="/backup" class="w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                💾 Fazer Backup
-            </a>
         </div>
-
-    <!-- Upload de Arquivo -->
-    <form action="/upload" method="post" enctype="multipart/form-data" class="bg-gray-800 p-4 rounded shadow">
-        <label for="fileInput" class="block text-white font-bold mb-2">Upload de Arquivo</label>
-
-        <div class="flex items-center space-x-4">
-            <label for="fileInput" class="cursor-pointer bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
-                📁 Escolher Arquivo
-            </label>
-            <span id="fileName" class="text-white">Nenhum arquivo selecionado.</span>
+    </div>
+    
+    <!-- Controles do Playit.gg -->
+    {% if PLAYIT_API_KEY %}
+    <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg mb-8">
+        <h2 class="text-2xl font-bold mb-4 flex items-center">
+            <i class="fas fa-network-wired mr-2 text-indigo-400"></i> Playit.gg
+        </h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form action="{{ url_for('start_playit_route') }}" method="post">
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition flex items-center justify-center">
+                    <i class="fas fa-play-circle mr-2"></i> Iniciar Playit
+                </button>
+            </form>
+            <form action="{{ url_for('stop_playit_route') }}" method="post">
+                <button type="submit" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-4 rounded-lg transition flex items-center justify-center">
+                    <i class="fas fa-stop-circle mr-2"></i> Parar Playit
+                </button>
+            </form>
         </div>
-
-        <input id="fileInput" name="file" type="file" class="hidden" onchange="updateFileName()" />
-
-        <button type="submit" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
-            ⬆️ Enviar
-        </button>
-    </form>
+        
+        <!-- Informações da API do Playit -->
+        {% if playit_tunnel_info %}
+        <div class="mt-6 p-4 bg-gray-700/30 rounded-lg">
+            <h3 class="font-bold mb-2 flex items-center">
+                <i class="fas fa-info-circle mr-2 text-indigo-400"></i> Informações do Túnel
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <p><span class="text-gray-400">Nome:</span> <span class="text-white">{{ playit_tunnel_info.tunnel.name }}</span></p>
+                <p><span class="text-gray-400">Status:</span> <span class="text-{{ 'green' if playit_tunnel_info.tunnel.status == 'active' else 'yellow' }}-400">{{ playit_tunnel_info.tunnel.status }}</span></p>
+                <p><span class="text-gray-400">Porta Local:</span> <span class="text-white">{{ playit_tunnel_info.tunnel.localPort }}</span></p>
+                {% if playit_tunnel_info.tunnel.playitDomain %}
+                <p><span class="text-gray-400">Domínio:</span> <span class="text-white">{{ playit_tunnel_info.tunnel.playitDomain }}</span></p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <!-- Controles de Backup Automático -->
+    <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg mb-8">
+        <h2 class="text-2xl font-bold mb-4 flex items-center">
+            <i class="fas fa-save mr-2 text-yellow-400"></i> Backup Automático
+        </h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form action="{{ url_for('manual_auto_backup') }}" method="post">
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition flex items-center justify-center">
+                    <i class="fas fa-play-circle mr-2"></i> Executar Backup Agora
+                </button>
+            </form>
+            <form action="{{ url_for('backup_auto_toggle') }}" method="post">
+                <button type="submit" class="w-full {% if auto_backup_enabled %}bg-red-600 hover:bg-red-700{% else %}bg-green-600 hover:bg-green-700{% endif %} text-white font-bold py-3 px-4 rounded-lg transition flex items-center justify-center">
+                    <i class="fas fa-{{ 'stop' if auto_backup_enabled else 'play' }}-circle mr-2"></i>
+                    {% if auto_backup_enabled %}Desativar{% else %}Ativar{% endif %} Backup Automático
+                </button>
+            </form>
+        </div>
+        
+        {% if auto_backup_enabled %}
+        <div class="mt-4 p-4 bg-gray-700/30 rounded-lg">
+            <h3 class="font-bold mb-2 flex items-center">
+                <i class="fas fa-cog mr-2 text-yellow-400"></i> Configurações Atuais
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <p><span class="text-gray-400">Intervalo:</span> <span class="text-white">{{ auto_backup_interval // 60 }} minutos</span></p>
+                <p><span class="text-gray-400">Backups Mantidos:</span> <span class="text-white">{{ auto_backup_keep }}</span></p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Upload de Arquivos -->
+    <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg">
+        <h2 class="text-2xl font-bold mb-4 flex items-center">
+            <i class="fas fa-upload mr-2 text-blue-400"></i> Upload de Arquivos
+        </h2>
+        
+        <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="space-y-4">
+            <div class="flex items-center space-x-4">
+                <label for="fileInput" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition flex items-center">
+                    <i class="fas fa-folder-open mr-2"></i> Escolher Arquivo
+                </label>
+                <span id="fileName" class="text-gray-300">Nenhum arquivo selecionado</span>
+                <input id="fileInput" name="file" type="file" class="hidden" onchange="updateFileName()" />
+            </div>
+            <button type="submit" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-2 px-6 rounded-lg transition flex items-center">
+                <i class="fas fa-cloud-upload-alt mr-2"></i> Enviar Arquivo
+            </button>
+        </form>
+    </div>
 </div>
 
 <script>
     function updateFileName() {
         const input = document.getElementById("fileInput");
         const fileNameSpan = document.getElementById("fileName");
-        fileNameSpan.textContent = input.files.length > 0 ? input.files[0].name : "Nenhum arquivo selecionado.";
+        fileNameSpan.textContent = input.files.length > 0 ? input.files[0].name : "Nenhum arquivo selecionado";
     }
-</script>
-<script>
-    function updateFileName() {
-        const input = document.getElementById("fileInput");
-        const fileNameSpan = document.getElementById("fileName");
-        fileNameSpan.textContent = input.files.length > 0 ? input.files[0].name : "Nenhum arquivo selecionado.";
-    }
-
+    
+    // Atualizar status automaticamente
     function atualizarStatus() {
-        fetch("/status_json")
+        fetch("{{ url_for('status_json') }}")
             .then(res => res.json())
             .then(data => {
-                const el = document.getElementById("status-servidor");
-                let bg = "bg-gray-800";
-                let texto = "❔ Desconhecido";
-
-                switch (data.status) {
-                    case "ligado":
-                        bg = "bg-green-800";
-                        texto = `🟢 Ligado<br>🎮 Jogadores Online: <strong>${data.players}</strong>`;
-                        break;
-                    case "desligado":
-                        bg = "bg-red-800";
-                        texto = "🔴 Desligado";
-                        break;
-                    case "ligando":
-                        bg = "bg-yellow-600";
-                        texto = "🟡 Ligando...";
-                        break;
-                    case "desligando":
-                        bg = "bg-gray-600";
-                        texto = "⚪ Desligando...";
-                        break;
-                }
-
-                el.className = "p-4 rounded shadow text-white mb-6 " + bg;
-                el.innerHTML = `<p class="text-xl font-semibold">Status do Servidor:<br><span class="font-bold">${texto}</span></p>`;
+                // Atualizar status do servidor
+                const statusElements = document.querySelectorAll('[data-status="server"]');
+                statusElements.forEach(el => {
+                    el.className = el.className.replace(/text-\w+-\d+/, 
+                        data.status === 'ligado' ? 'text-green-400' : 
+                        data.status === 'desligado' ? 'text-red-400' : 'text-yellow-400');
+                    el.innerHTML = data.status === 'ligado' ? '🟢 Online' : 
+                                  data.status === 'desligado' ? '🔴 Offline' : 
+                                  data.status === 'ligando' ? '🟡 Iniciando' : '⚪ Parando';
+                });
+                
+                // Atualizar jogadores online
+                const playerElements = document.querySelectorAll('[data-players="count"]');
+                playerElements.forEach(el => {
+                    el.textContent = data.players;
+                });
+                
+                // Atualizar status do Playit
+                const playitElements = document.querySelectorAll('[data-playit="status"]');
+                playitElements.forEach(el => {
+                    el.className = el.className.replace(/text-\w+-\d+/, 
+                        data.playit_agent_status === 'Online' ? 'text-green-400' : 'text-red-400');
+                    el.innerHTML = data.playit_agent_status === 'Online' ? '🟢 Online' : '🔴 Offline';
+                });
+            })
+            .catch(err => {
+                console.error("Erro ao atualizar status:", err);
             });
     }
-
-    setInterval(atualizarStatus, 2000);
-    window.onload = atualizarStatus;
+    
+    // Atualizar status a cada 3 segundos
+    setInterval(atualizarStatus, 3000);
 </script>
 {% endblock %}

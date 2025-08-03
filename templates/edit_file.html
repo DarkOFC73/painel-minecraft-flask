@@ -1,15 +1,48 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="container mx-auto px-4 py-6 text-white">
-    <h1 class="text-2xl font-bold mb-4">Editando: {{ file_path }}</h1>
+<div class="container mx-auto px-4 py-6">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-3xl font-bold flex items-center">
+            <i class="fas fa-edit text-green-400 mr-3"></i> Editando: {{ file_path }}
+        </h1>
+        <a href="{{ url_for('file_manager', path=parent_path) }}" 
+           class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition flex items-center">
+            <i class="fas fa-arrow-left mr-2"></i> Voltar
+        </a>
+    </div>
 
-    <form method="POST" action="{{ url_for('edit_file') }}?path={{ file_path | urlencode }}">
-        <textarea name="content" class="w-full h-96 bg-gray-900 text-white p-4 rounded border border-gray-700">
-{{ content }}</textarea>
-        <div class="mt-4 flex space-x-4">
-            <button type="submit" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-white font-bold">💾 Salvar</button>
-            <a href="{{ url_for('file_manager', path=parent_path) }}" class="text-blue-400 hover:underline mt-2">⬅️ Voltar</a>
-        </div>
-    </form>
+    <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 shadow-lg overflow-hidden">
+        <form method="POST" action="{{ url_for('edit_file') }}?path={{ file_path | urlencode }}" class="h-full flex flex-col">
+            <div class="p-4 border-b border-gray-700">
+                <button type="submit" 
+                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition flex items-center">
+                    <i class="fas fa-save mr-2"></i> Salvar Alterações
+                </button>
+            </div>
+            <div class="flex-1 overflow-hidden">
+                <textarea name="content" 
+                          class="w-full h-96 md:h-[calc(100vh-250px)] bg-gray-900 text-green-400 p-4 font-mono text-sm resize-none focus:outline-none">{{ content }}</textarea>
+            </div>
+            <div class="p-4 border-t border-gray-700 flex justify-between items-center">
+                <div class="text-sm text-gray-400">
+                    <i class="fas fa-info-circle mr-1"></i> Use Ctrl+S para salvar
+                </div>
+                <button type="submit" 
+                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition flex items-center">
+                    <i class="fas fa-save mr-2"></i> Salvar
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
+
+<script>
+// Atalho de teclado para salvar (Ctrl+S)
+document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        document.querySelector('form').dispatchEvent(new Event('submit'));
+    }
+});
+</script>
 {% endblock %}

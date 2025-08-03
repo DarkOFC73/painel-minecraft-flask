@@ -14,9 +14,86 @@ import logging
 import requests
 import schedule
 import atexit
+import secrets
+import string
 # 6 da manhã.
 
-# função que obriga a usar do .env
+def read_env_file():
+    """Lê o arquivo .env e retorna as configurações"""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    env_vars = {}
+    
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    # Remove aspas se existirem
+                    value = value.strip('"\'')
+                    env_vars[key.strip()] = value
+    
+    return env_vars
+
+def write_env_file(env_vars):
+    """Escreve as configurações no arquivo .env"""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    
+    # Template do arquivo .env com comentários
+    env_template = """# Configurações do Painel Minecraft
+# Chave secreta para sessões (gere uma aleatória)
+SECRET_KEY={SECRET_KEY}
+
+# Senha para acessar o painel
+PASSWORD={PASSWORD}
+
+# Diretório onde está o servidor Minecraft
+SERVER_DIR={SERVER_DIR}
+
+# Nome do arquivo JAR do servidor
+JAR_NAME={JAR_NAME}
+
+# Caminho para o executável do Playit
+PLAYIT_PATH={PLAYIT_PATH}
+
+# Configurações RCON
+RCON_PASSWORD={RCON_PASSWORD}
+RCON_PORT={RCON_PORT}
+
+# Configurações do Playit.gg (opcionais)
+PLAYIT_API_KEY={PLAYIT_API_KEY}
+PLAYIT_TUNNEL_ID={PLAYIT_TUNNEL_ID}
+PLAYIT_AGENT_PATH={PLAYIT_AGENT_PATH}
+
+# Configurações de Backup Automático
+AUTO_BACKUP_ENABLED={AUTO_BACKUP_ENABLED}
+AUTO_BACKUP_INTERVAL={AUTO_BACKUP_INTERVAL}
+AUTO_BACKUP_KEEP={AUTO_BACKUP_KEEP}
+"""
+
+    # Preencher valores padrão se não existirem
+    defaults = {
+        'SECRET_KEY': env_vars.get('SECRET_KEY', 'sua_chave_secreta_aqui'),
+        'PASSWORD': env_vars.get('PASSWORD', 'sua_senha_aqui'),
+        'SERVER_DIR': env_vars.get('SERVER_DIR', '/caminho/para/servidor'),
+        'JAR_NAME': env_vars.get('JAR_NAME', 'server.jar'),
+        'PLAYIT_PATH': env_vars.get('PLAYIT_PATH', './playit'),
+        'RCON_PASSWORD': env_vars.get('RCON_PASSWORD', 'senha_rcon'),
+        'RCON_PORT': env_vars.get('RCON_PORT', '25575'),
+        'PLAYIT_API_KEY': env_vars.get('PLAYIT_API_KEY', ''),
+        'PLAYIT_TUNNEL_ID': env_vars.get('PLAYIT_TUNNEL_ID', ''),
+        'PLAYIT_AGENT_PATH': env_vars.get('PLAYIT_AGENT_PATH', './playit-agent'),
+        'AUTO_BACKUP_ENABLED': env_vars.get('AUTO_BACKUP_ENABLED', 'false'),
+        'AUTO_BACKUP_INTERVAL': env_vars.get('AUTO_BACKUP_INTERVAL', '3600'),
+        'AUTO_BACKUP_KEEP': env_vars.get('AUTO_BACKUP_KEEP', '5')
+    }
+    
+    with open(env_path, 'w', encoding='utf-8') as f:
+        f.write(env_template.format(**defaults))
+# olha o tamanho dessa porra vei, vibe code é bom mas não ajuda o ser humano
+
+
+# função que obriga a usar do .env, eu fiz cagada e inclui o playit na parte de obrigatorio, se puder corrigir e facilitar nossas vidas mais tarde
 def get_env_var(name):
     value = os.getenv(name)
     if not value:
@@ -327,6 +404,85 @@ def run_command(cmd):
     return True
 
 # --- Rotas ---
+@app.route('/config', methods=['GET', 'POST'])
+def config():
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        env_vars = {}
+        for key in request.form:
+            if request.form[key].strip():
+                env_vars[key] = request.form[key].strip()
+        
+        try:
+            write_env_file(env_vars)
+            flash("Configurações salvas com sucesso! Reinicie o painel para aplicar as mudanças.", "success")
+        except Exception as e:
+            flash(f"Erro ao salvar configurações: {e}", "error")
+        
+        return redirect(url_for('config'))
+    
+    current_env = read_env_file()
+    
+    return render_template('config.html', env_vars=current_env)
+
+@app.route('/config/generate_secret', methods=['POST'])
+def generate_secret():
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+    
+    import secrets
+    import string
+    
+    # Gerar chave secreta aleatória já que provavelmente ngm vai usar uma propria
+    secret_key = ''.join(secrets.choice(string.ascii_letters + string.digits + '!@#$%^&*') for _ in range(32))
+    
+    return jsonify({'secret_key': secret_key})
+
+@app.route('/config/validate', methods=['POST'])
+def validate_config():
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+    
+    validation_results = {}
+    
+    server_dir = request.json.get('SERVER_DIR', '')
+    if server_dir:
+        validation_results['SERVER_DIR'] = {
+            'exists': os.path.exists(server_dir),
+            'writable': os.access(server_dir, os.W_OK) if os.path.exists(server_dir) else False
+        }
+
+    jar_name = request.json.get('JAR_NAME', '')
+    if jar_name and server_dir:
+        jar_path = os.path.join(server_dir, jar_name)
+        validation_results['JAR_NAME'] = {
+            'exists': os.path.exists(jar_path),
+            'is_jar': jar_name.endswith('.jar')
+        }
+    
+    playit_path = request.json.get('PLAYIT_PATH', '')
+    if playit_path:
+        validation_results['PLAYIT_PATH'] = {
+            'exists': os.path.exists(playit_path),
+            'executable': os.access(playit_path, os.X_OK) if os.path.exists(playit_path) else False
+        }
+    
+    rcon_port = request.json.get('RCON_PORT', '')
+    if rcon_port:
+        try:
+            port = int(rcon_port)
+            validation_results['RCON_PORT'] = {
+                'valid_range': 1 <= port <= 65535
+            }
+        except ValueError:
+            validation_results['RCON_PORT'] = {
+                'valid_range': False
+            }
+    
+    return jsonify(validation_results)
+
 @app.route("/status_json")
 def status_json():
     global server_state

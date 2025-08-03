@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <h1 class="text-3xl font-bold mb-6 flex items-center">
+        <i class="fas fa-cog text-purple-400 mr-3"></i> Configurações do Sistema
+    </h1>
+    
+    <!-- Aviso importante -->
+    <div class="bg-yellow-900/50 backdrop-blur-sm rounded-xl p-4 mb-6 border border-yellow-700">
+        <div class="flex items-center">
+            <i class="fas fa-exclamation-triangle text-yellow-400 text-xl mr-3"></i>
+            <div>
+                <h3 class="font-bold text-yellow-300 mb-1">⚠️ Atenção!</h3>
+                <p class="text-yellow-200 text-sm">
+                    Após salvar as configurações, você precisará reiniciar a aplicação para que as mudanças tenham efeito.
+                    Configurações incorretas podem impedir o funcionamento do painel.
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <form method="POST" class="space-y-6">
+        <!-- Configurações Básicas -->
+        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+                <i class="fas fa-key mr-2 text-blue-400"></i> Configurações de Segurança
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="SECRET_KEY" class="block text-sm font-medium text-gray-300 mb-2">
+                        Chave Secreta (SECRET_KEY)
+                    </label>
+                    <div class="flex">
+                        <input type="text" name="SECRET_KEY" id="SECRET_KEY" 
+                               value="{{ env_vars.get('SECRET_KEY', '') }}"
+                               class="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-l-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                               placeholder="Chave secreta para sessões">
+                        <button type="button" onclick="generateSecretKey()" 
+                                class="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-r-lg transition">
+                            <i class="fas fa-random"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Usado para criptografar sessões do usuário</p>
+                </div>
+                
+                <div>
+                    <label for="PASSWORD" class="block text-sm font-medium text-gray-300 mb-2">
+                        Senha do Painel (PASSWORD)
+                    </label>
+                    <input type="password" name="PASSWORD" id="PASSWORD" 
+                           value="{{ env_vars.get('PASSWORD', '') }}"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                           placeholder="Senha para acessar o painel">
+                    <p class="text-xs text-gray-500 mt-1">Senha para fazer login no painel</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Configurações do Servidor -->
+        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+                <i class="fas fa-server mr-2 text-green-400"></i> Configurações do Servidor Minecraft
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="SERVER_DIR" class="block text-sm font-medium text-gray-300 mb-2">
+                        Diretório do Servidor (SERVER_DIR)
+                        <span id="server_dir_status" class="ml-2"></span>
+                    </label>
+                    <input type="text" name="SERVER_DIR" id="SERVER_DIR" 
+                           value="{{ env_vars.get('SERVER_DIR', '') }}"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                           placeholder="/caminho/para/servidor"
+                           onblur="validateField('SERVER_DIR')">
+                    <p class="text-xs text-gray-500 mt-1">Caminho completo para a pasta do servidor</p>
+                </div>
+                
+                <div>
+                    <label for="JAR_NAME" class="block text-sm font-medium text-gray-300 mb-2">
+                        Nome do JAR (JAR_NAME)
+                        <span id="jar_name_status" class="ml-2"></span>
+                    </label>
+                    <input type="text" name="JAR_NAME" id="JAR_NAME" 
+                           value="{{ env_vars.get('JAR_NAME', '') }}"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                           placeholder="server.jar"
+                           onblur="validateField('JAR_NAME')">
+                    <p class="text-xs text-gray-500 mt-1">Nome do arquivo JAR do servidor</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Configurações RCON -->
+        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+                <i class="fas fa-terminal mr-2 text-yellow-400"></i> Configurações RCON
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="RCON_PASSWORD" class="block text-sm font-medium text-gray-300 mb-2">
+                        Senha RCON (RCON_PASSWORD)
+                    </label>
+                    <input type="password" name="RCON_PASSWORD" id="RCON_PASSWORD" 
+                           value="{{ env_vars.get('RCON_PASSWORD', '') }}"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                           placeholder="senha_rcon">
+                    <p class="text-xs text-gray-500 mt-1">Senha configurada no server.properties</p>
+                </div>
+                
+                <div>
+                    <label for="RCON_PORT" class="block text-sm font-medium text-gray-300 mb-2">
+                        Porta RCON (RCON_PORT)
+                        <span id="rcon_port_status" class="ml-2"></span>
+                    </label>
+                    <input type="number" name="RCON_PORT" id="RCON_PORT" 
+                           value="{{ env_vars.get('RCON_PORT', '') }}"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                           placeholder="25575" min="1" max="65535"
+                           onblur="validateField('RCON_PORT')">
+                    <p class="text-xs text-gray-500 mt-1">Porta RCON configurada no server.properties</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Configurações Playit.gg -->
+        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+                <i class="fas fa-globe mr-2 text-indigo-400"></i> Configurações Playit.gg (Opcional)
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="PLAYIT_PATH" class="block text-sm font-medium text-gray-300 mb-2">
+                        Caminho do Playit (PLAYIT_PATH)
+                        <span id="playit_path_status" class="ml-2"></span>
+                    </label>
+                    <input type="text" name="PLAYIT_PATH" id="PLAYIT_PATH" 
+                           value="{{ env_vars.get('PLAYIT_PATH', '') }}"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                           placeholder="./playit"
+                           onblur="validateField('PLAYIT_PATH')">
+                    <p class="text-xs text-gray-500 mt-1">Caminho para o executável do Playit</p>
+                </div>
+                
+                <div>
+                    <label for="PLAYIT_AGENT_PATH" class="block text-sm font-medium text-gray-300 mb-2">
+                        Caminho do Agente (PLAYIT_AGENT_PATH)
+                    </label>
+                    <input type="text" name="PLAYIT_AGENT_PATH" id="PLAYIT_AGENT_PATH" 
+                           value="{{ env_vars.get('PLAYIT_AGENT_PATH', '') }}"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                           placeholder="./playit-agent">
+                    <p class="text-xs text-gray-500 mt-1">Caminho para o agente do Playit.gg</p>
+                </div>
+                
+                <div>
+                    <label for="PLAYIT_API_KEY" class="block text-sm font-medium text-gray-300 mb-2">
+                        Chave da API (PLAYIT_API_KEY)
+                    </label>
+                    <input type="password" name="PLAYIT_API_KEY" id="PLAYIT_API_KEY" 
+                           value="{{ env_vars.get('PLAYIT_API_KEY', '') }}"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                           placeholder="Chave da API do Playit.gg">
+                    <p class="text-xs text-gray-500 mt-1">Obtida no painel do Playit.gg</p>
+                </div>
+                
+                <div>
+                    <label for="PLAYIT_TUNNEL_ID" class="block text-sm font-medium text-gray-300 mb-2">
+                        ID do Túnel (PLAYIT_TUNNEL_ID)
+                    </label>
+                    <input type="text" name="PLAYIT_TUNNEL_ID" id="PLAYIT_TUNNEL_ID" 
+                           value="{{ env_vars.get('PLAYIT_TUNNEL_ID', '') }}"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                           placeholder="ID do túnel específico">
+                    <p class="text-xs text-gray-500 mt-1">ID do túnel específico para monitorar</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Configurações de Backup -->
+        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+                <i class="fas fa-save mr-2 text-orange-400"></i> Configurações de Backup Automático
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label for="AUTO_BACKUP_ENABLED" class="block text-sm font-medium text-gray-300 mb-2">
+                        Backup Ativado
+                    </label>
+                    <select name="AUTO_BACKUP_ENABLED" id="AUTO_BACKUP_ENABLED"
+                            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                        <option value="false" {% if env_vars.get('AUTO_BACKUP_ENABLED', 'false') == 'false' %}selected{% endif %}>Desativado</option>
+                        <option value="true" {% if env_vars.get('AUTO_BACKUP_ENABLED') == 'true' %}selected{% endif %}>Ativado</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">Ativar backup automático</p>
+                </div>
+                
+                <div>
+                    <label for="AUTO_BACKUP_INTERVAL" class="block text-sm font-medium text-gray-300 mb-2">
+                        Intervalo (segundos)
+                    </label>
+                    <input type="number" name="AUTO_BACKUP_INTERVAL" id="AUTO_BACKUP_INTERVAL" 
+                           value="{{ env_vars.get('AUTO_BACKUP_INTERVAL', '3600') }}"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                           placeholder="3600" min="300">
+                    <p class="text-xs text-gray-500 mt-1">Intervalo entre backups (min: 300s)</p>
+                </div>
+                
+                <div>
+                    <label for="AUTO_BACKUP_KEEP" class="block text-sm font-medium text-gray-300 mb-2">
+                        Backups Mantidos
+                    </label>
+                    <input type="number" name="AUTO_BACKUP_KEEP" id="AUTO_BACKUP_KEEP" 
+                           value="{{ env_vars.get('AUTO_BACKUP_KEEP', '5') }}"
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                           placeholder="5" min="1" max="50">
+                    <p class="text-xs text-gray-500 mt-1">Quantidade de backups a manter</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Botões de ação -->
+        <div class="flex flex-col sm:flex-row gap-4 justify-end">
+            <button type="button" onclick="validateAllFields()" 
+                    class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition flex items-center justify-center">
+                <i class="fas fa-check-circle mr-2"></i> Validar Configurações
+            </button>
+            
+            <button type="submit" 
+                    class="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-lg transition flex items-center justify-center">
+                <i class="fas fa-save mr-2"></i> Salvar Configurações
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function generateSecretKey() {
+    fetch('{{ url_for("generate_secret") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('SECRET_KEY').value = data.secret_key;
+    })
+    .catch(error => {
+        console.error('Erro ao gerar chave:', error);
+    });
+}
+
+function validateField(fieldName) {
+    const field = document.getElementById(fieldName);
+    const statusSpan = document.getElementById(fieldName.toLowerCase() + '_status');
+    
+    if (!statusSpan) return;
+    
+    const config = {};
+    config[fieldName] = field.value;
+    
+    // Adicionar SERVER_DIR se necessário para validar JAR_NAME
+    if (fieldName === 'JAR_NAME') {
+        config['SERVER_DIR'] = document.getElementById('SERVER_DIR').value;
+    }
+    
+    fetch('{{ url_for("validate_config") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(config)
+    })
+    .then(response => response.json())
+    .then(data => {
+        const result = data[fieldName];
+        if (result) {
+            let html = '';
+            
+            switch(fieldName) {
+                case 'SERVER_DIR':
+                    if (result.exists && result.writable) {
+                        html = '<i class="fas fa-check-circle text-green-400" title="Diretório existe e é gravável"></i>';
+                    } else if (result.exists) {
+                        html = '<i class="fas fa-exclamation-triangle text-yellow-400" title="Diretório existe mas não é gravável"></i>';
+                    } else {
+                        html = '<i class="fas fa-times-circle text-red-400" title="Diretório não existe"></i>';
+                    }
+                    break;
+                    
+                case 'JAR_NAME':
+                    if (result.exists && result.is_jar) {
+                        html = '<i class="fas fa-check-circle text-green-400" title="Arquivo JAR encontrado"></i>';
+                    } else if (!result.is_jar) {
+                        html = '<i class="fas fa-exclamation-triangle text-yellow-400" title="Não é um arquivo .jar"></i>';
+                    } else {
+                        html = '<i class="fas fa-times-circle text-red-400" title="Arquivo não encontrado"></i>';
+                    }
+                    break;
+                    
+                case 'PLAYIT_PATH':
+                    if (result.exists && result.executable) {
+                        html = '<i class="fas fa-check-circle text-green-400" title="Executável encontrado"></i>';
+                    } else if (result.exists) {
+                        html = '<i class="fas fa-exclamation-triangle text-yellow-400" title="Arquivo existe mas não é executável"></i>';
+                    } else {
+                        html = '<i class="fas fa-times-circle text-red-400" title="Executável não encontrado"></i>';
+                    }
+                    break;
+                    
+                case 'RCON_PORT':
+                    if (result.valid_range) {
+                        html = '<i class="fas fa-check-circle text-green-400" title="Porta válida"></i>';
+                    } else {
+                        html = '<i class="fas fa-times-circle text-red-400" title="Porta inválida (1-65535)"></i>';
+                    }
+                    break;
+            }
+            
+            statusSpan.innerHTML = html;
+        }
+    })
+    .catch(error => {
+        console.error('Erro na validação:', error);
+    });
+}
+
+function validateAllFields() {
+    const fields = ['SERVER_DIR', 'JAR_NAME', 'PLAYIT_PATH', 'RCON_PORT'];
+    fields.forEach(field => {
+        if (document.getElementById(field).value) {
+            validateField(field);
+        }
+    });
+}
+
+// Mostrar/ocultar senha
+document.querySelectorAll('input[type="password"]').forEach(input => {
+    const wrapper = input.parentElement;
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'absolute right-2 top-2 text-gray-400 hover:text-gray-300';
+    toggleBtn.innerHTML = '<i class="fas fa-eye"></i>';
+    
+    if (wrapper.style.position !== 'relative') {
+        wrapper.style.position = 'relative';
+        wrapper.appendChild(toggleBtn);
+        
+        toggleBtn.onclick = function() {
+            if (input.type === 'password') {
+                input.type = 'text';
+                toggleBtn.innerHTML = '<i class="fas fa-eye-slash"></i>';
+            } else {
+                input.type = 'password';
+                toggleBtn.innerHTML = '<i class="fas fa-eye"></i>';
+            }
+        };
+    }
+});
+
+// Auto-validação durante digitação
+document.querySelectorAll('input[onblur]').forEach(input => {
+    input.addEventListener('input', function() {
+        // Limpar status anterior
+        const statusSpan = document.getElementById(this.name.toLowerCase() + '_status');
+        if (statusSpan) {
+            statusSpan.innerHTML = '';
+        }
+    });
+});
+</script>
+{% endblock %}

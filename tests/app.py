@@ -16,6 +16,14 @@ import schedule
 import atexit
 # 6 da manhã.
 
+# função que obriga a usar do .env
+def get_env_var(name):
+    value = os.getenv(name)
+    if not value:
+        raise SystemExit(f"[ERRO] Variável de ambiente obrigatória '{name}' não definida no .env!")
+    return value
+
+
 # Configuração de logging para reduzir os debugs
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
@@ -23,17 +31,17 @@ log.setLevel(logging.ERROR)
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY") or "senha123"
-SERVER_DIR = os.path.abspath("servidor") + "/"
-JAR_NAME = os.getenv("JAR_NAME") or "server.jar"
-PLAYIT_PATH = os.getenv("PLAYIT_PATH") or "./playit/playit-linux"
+app.secret_key = get_env_var("SECRET_KEY")
+SERVER_DIR = os.path.abspath(get_env_var("SERVER_DIR")) + "/"
+JAR_NAME = get_env_var("JAR_NAME")
+PLAYIT_PATH = get_env_var("PLAYIT_PATH")
 LOG_FILE = os.path.join(SERVER_DIR, "logs", "latest.log")
 ALLOWED_EXTENSIONS = {"jar", "zip", "txt", "json", "cfg"}
 FILE_ROOT = os.path.abspath(SERVER_DIR)
 status_info = {"running": False, "players": []}
 RCON_HOST = "127.0.0.1"
-RCON_PASSWORD = os.getenv("RCON_PASSWORD") or "meowmeow"
-RCON_PORT = int(os.getenv("RCON_PORT") or 25575)
+RCON_PASSWORD = get_env_var("RCON_PASSWORD")
+RCON_PORT = int(get_env_var("RCON_PORT"))
 
 # Configurações do Playit.gg
 PLAYIT_API_KEY = os.getenv("PLAYIT_API_KEY") or ""
@@ -141,21 +149,26 @@ def stop_server():
             pass  # Removido o print de erro
     server_state = "desligado"
 
-def backup_world():
+def backup_world(): #se isso funcionar de primeira eu troco meu nome pra Lain
     """Realiza backup do mundo do servidor"""
     try:
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         backup_filename = f"world_backup_{timestamp}.zip"
         backup_path = os.path.join(SERVER_DIR, backup_filename)
-        
+
         with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as z:
-            world_path = os.path.join(SERVER_DIR, "world")
-            if os.path.exists(world_path):
-                for root, dirs, files in os.walk(world_path):
-                    for file in files:
-                        abs_path = os.path.join(root, file)
-                        arc_path = os.path.relpath(abs_path, SERVER_DIR)
-                        z.write(abs_path, arc_path)
+            # Lista de mundos para incluir no backup
+            worlds = ["world", "world_nether", "world_the_end"]
+
+            for world_name in worlds:
+                world_path = os.path.join(SERVER_DIR, world_name)
+                if os.path.exists(world_path):
+                    for root, dirs, files in os.walk(world_path):
+                        for file in files:
+                            abs_path = os.path.join(root, file)
+                            arc_path = os.path.relpath(abs_path, SERVER_DIR)
+                            z.write(abs_path, arc_path)
+
         return backup_path
     except Exception as e:
         print(f"[ERRO] Backup falhou: {e}")

@@ -14,92 +14,8 @@ import logging
 import requests
 import schedule
 import atexit
-import secrets
-import string
-# 6 da manhã.
-
-def read_env_file():
-    """Lê o arquivo .env e retorna as configurações"""
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
-    env_vars = {}
-    
-    if os.path.exists(env_path):
-        with open(env_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    # Remove aspas se existirem
-                    value = value.strip('"\'')
-                    env_vars[key.strip()] = value
-    
-    return env_vars
-
-def write_env_file(env_vars):
-    """Escreve as configurações no arquivo .env"""
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
-    
-    # Template do arquivo .env com comentários
-    env_template = """# Configurações do Painel Minecraft
-# Chave secreta para sessões (gere uma aleatória)
-SECRET_KEY={SECRET_KEY}
-
-# Senha para acessar o painel
-PASSWORD={PASSWORD}
-
-# Diretório onde está o servidor Minecraft
-SERVER_DIR={SERVER_DIR}
-
-# Nome do arquivo JAR do servidor
-JAR_NAME={JAR_NAME}
-
-# Caminho para o executável do Playit
-PLAYIT_PATH={PLAYIT_PATH}
-
-# Configurações RCON
-RCON_PASSWORD={RCON_PASSWORD}
-RCON_PORT={RCON_PORT}
-
-# Configurações do Playit.gg (opcionais)
-PLAYIT_API_KEY={PLAYIT_API_KEY}
-PLAYIT_TUNNEL_ID={PLAYIT_TUNNEL_ID}
-PLAYIT_AGENT_PATH={PLAYIT_AGENT_PATH}
-
-# Configurações de Backup Automático
-AUTO_BACKUP_ENABLED={AUTO_BACKUP_ENABLED}
-AUTO_BACKUP_INTERVAL={AUTO_BACKUP_INTERVAL}
-AUTO_BACKUP_KEEP={AUTO_BACKUP_KEEP}
-"""
-
-    # Preencher valores padrão se não existirem
-    defaults = {
-        'SECRET_KEY': env_vars.get('SECRET_KEY', 'sua_chave_secreta_aqui'),
-        'PASSWORD': env_vars.get('PASSWORD', 'sua_senha_aqui'),
-        'SERVER_DIR': env_vars.get('SERVER_DIR', '/caminho/para/servidor'),
-        'JAR_NAME': env_vars.get('JAR_NAME', 'server.jar'),
-        'PLAYIT_PATH': env_vars.get('PLAYIT_PATH', './playit'),
-        'RCON_PASSWORD': env_vars.get('RCON_PASSWORD', 'senha_rcon'),
-        'RCON_PORT': env_vars.get('RCON_PORT', '25575'),
-        'PLAYIT_API_KEY': env_vars.get('PLAYIT_API_KEY', ''),
-        'PLAYIT_TUNNEL_ID': env_vars.get('PLAYIT_TUNNEL_ID', ''),
-        'PLAYIT_AGENT_PATH': env_vars.get('PLAYIT_AGENT_PATH', './playit-agent'),
-        'AUTO_BACKUP_ENABLED': env_vars.get('AUTO_BACKUP_ENABLED', 'false'),
-        'AUTO_BACKUP_INTERVAL': env_vars.get('AUTO_BACKUP_INTERVAL', '3600'),
-        'AUTO_BACKUP_KEEP': env_vars.get('AUTO_BACKUP_KEEP', '5')
-    }
-    
-    with open(env_path, 'w', encoding='utf-8') as f:
-        f.write(env_template.format(**defaults))
-# olha o tamanho dessa porra vei, vibe code é bom mas não ajuda o ser humano
-
-
-# função que obriga a usar do .env, eu fiz cagada e inclui o playit na parte de obrigatorio, se puder corrigir e facilitar nossas vidas mais tarde
-def get_env_var(name):
-    value = os.getenv(name)
-    if not value:
-        raise SystemExit(f"[ERRO] Variável de ambiente obrigatória '{name}' não definida no .env!")
-    return value
-
+import glob
+import platform
 
 # Configuração de logging para reduzir os debugs
 log = logging.getLogger('werkzeug')
@@ -107,25 +23,36 @@ log.setLevel(logging.ERROR)
 
 load_dotenv()
 
+def get_env_var(name, default=None, required=False):
+    """Obtém variável de ambiente com opção de valor padrão ou obrigatório"""
+    value = os.getenv(name, default)
+    if required and not value:
+        raise SystemExit(f"[ERRO] Variável de ambiente obrigatória '{name}' não definida no .env!")
+    return value
+
+# Configurações essenciais (obrigatórias)
 app = Flask(__name__)
-app.secret_key = get_env_var("SECRET_KEY")
-SERVER_DIR = os.path.abspath(get_env_var("SERVER_DIR")) + "/"
-JAR_NAME = get_env_var("JAR_NAME")
-PLAYIT_PATH = get_env_var("PLAYIT_PATH")
+app.secret_key = get_env_var("SECRET_KEY", required=True)
+PASSWORD = get_env_var("PASSWORD", required=True)
+RCON_PASSWORD = get_env_var("RCON_PASSWORD", required=True)
+RCON_PORT = int(get_env_var("RCON_PORT", 25575))
+
+# Configurações opcionais com valores padrão
+SERVER_DIR = os.path.abspath(get_env_var("SERVER_DIR", "servidor")) + "/"
+JAR_NAME = get_env_var("JAR_NAME", "server.jar")
+PLAYIT_PATH = get_env_var("PLAYIT_PATH", "./playit-agent")
 LOG_FILE = os.path.join(SERVER_DIR, "logs", "latest.log")
-ALLOWED_EXTENSIONS = {"jar", "zip", "txt", "json", "cfg"}
+ALLOWED_EXTENSIONS = {"jar", "zip", "txt", "json", "cfg", "yml", "yaml", "dat", "mcfunction", " properties", "toml", "conf"}
 FILE_ROOT = os.path.abspath(SERVER_DIR)
 status_info = {"running": False, "players": []}
 RCON_HOST = "127.0.0.1"
-RCON_PASSWORD = get_env_var("RCON_PASSWORD")
-RCON_PORT = int(get_env_var("RCON_PORT"))
 
-# Configurações do Playit.gg
-PLAYIT_API_KEY = os.getenv("PLAYIT_API_KEY") or ""
-PLAYIT_TUNNEL_ID = os.getenv("PLAYIT_TUNNEL_ID") or ""
-PLAYIT_AGENT_PATH = os.getenv("PLAYIT_AGENT_PATH") or "./playit-agent"
+# Configurações do Playit.gg (opcionais)
+PLAYIT_API_KEY = os.getenv("PLAYIT_API_KEY", "")
+PLAYIT_TUNNEL_ID = os.getenv("PLAYIT_TUNNEL_ID", "")
+PLAYIT_AGENT_PATH = os.getenv("PLAYIT_AGENT_PATH", "./playit-agent")
 
-# Configurações de Backup Automático
+# Configurações de Backup Automático (opcionais)
 AUTO_BACKUP_ENABLED = os.getenv("AUTO_BACKUP_ENABLED", "false").lower() == "true"
 AUTO_BACKUP_INTERVAL = int(os.getenv("AUTO_BACKUP_INTERVAL", "3600"))  # segundos
 AUTO_BACKUP_KEEP = int(os.getenv("AUTO_BACKUP_KEEP", "5"))
@@ -169,10 +96,14 @@ def get_full_path(subpath):
     return full
 
 def is_server_running():
+    """Detecta se o servidor está rodando com suporte a Fabric, Forge e Vanilla"""
     for proc in psutil.process_iter(['name', 'cmdline']):
         try:
             if proc.info['name'] and 'java' in proc.info['name'].lower():
-                if any(JAR_NAME.lower() in str(arg).lower() for arg in proc.info['cmdline']):
+                cmdline = ' '.join(proc.info['cmdline']).lower()
+                # Verifica se é o servidor correto pelo diretório e JAR
+                if (os.path.abspath(SERVER_DIR).lower() in cmdline and 
+                    JAR_NAME.lower() in cmdline):
                     return True
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
@@ -181,17 +112,34 @@ def is_server_running():
 server_state = "ligado" if is_server_running() else "desligado"
 
 def start_server():
+    """Inicia o servidor com suporte a diferentes tipos (Fabric, Forge, Vanilla)"""
     global server_state
     server_state = "ligando"
+    
     def run():
         global server_state
         try:
+            # Detectar tipo de servidor para comando apropriado
+            jar_path = os.path.join(SERVER_DIR, JAR_NAME)
+            
+            # Comando base
+            cmd = ["java", "-Xmx2048M", "-Xms2048M"]
+            
+            # Adicionar flags específicas conforme o tipo de servidor
+            if "fabric" in JAR_NAME.lower():
+                cmd.extend(["-jar", JAR_NAME, "nogui"])
+            elif "forge" in JAR_NAME.lower():
+                cmd.extend(["-jar", JAR_NAME, "--nogui"])
+            else:  # Vanilla ou outros
+                cmd.extend(["-jar", JAR_NAME, "nogui"])
+            
             proc = subprocess.Popen(
-                ["java", "-Xmx2048M", "-Xms2048M", "-jar", JAR_NAME, "nogui"],
+                cmd,
                 cwd=SERVER_DIR,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
+            
             for i in range(20):  
                 time.sleep(1)
                 if is_server_running():
@@ -206,46 +154,66 @@ def start_server():
             server_state = "desligado"
         finally:
             server_state = "desligado"
+    
     threading.Thread(target=run, daemon=True).start()
 
+# socorro
 def stop_server():
+    """Para o servidor identificando o processo específico com suporte a diferentes tipos"""
     global server_state
     server_state = "desligando"
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+    
+    # Primeiro tenta parar via RCON
+    try:
+        with MCRcon(RCON_HOST, RCON_PASSWORD, port=RCON_PORT) as mcr:
+            mcr.command("stop")
+        # Espera um pouco para o servidor parar gracefulmente
+        time.sleep(5)
+    except:
+        pass  # Se RCON falhar, continua com kill
+    
+    # Encontra o processo específico do servidor
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'cwd']):
         try:
-            name = proc.info['name']
-            cmdline = proc.info['cmdline']
-            if isinstance(cmdline, list):
-                joined_cmd = ' '.join(cmdline).lower()
-            else:
-                joined_cmd = ''
-            if name and 'java' in name.lower() and JAR_NAME.lower() in joined_cmd:
+            # Verifica se é um processo Java com o JAR correto no diretório correto
+            if (proc.info['name'] and 'java' in proc.info['name'].lower() and 
+                any(JAR_NAME.lower() in str(arg).lower() for arg in proc.info['cmdline']) and
+                str(proc.info['cwd']).lower() == os.path.abspath(SERVER_DIR).lower()):
+                
+                # Tenta parar gracefulmente primeiro
                 proc.terminate()
-                proc.wait(timeout=10)
-        except Exception as e:
-            pass  # Removido o print de erro
+                try:
+                    proc.wait(timeout=10)
+                except psutil.TimeoutExpired:
+                    # Se não parar, força
+                    proc.kill()
+                    proc.wait()
+                break
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    
     server_state = "desligado"
 
-def backup_world(): #se isso funcionar de primeira eu troco meu nome pra Lain
-    """Realiza backup do mundo do servidor"""
+def backup_world():
+    """Realiza backup do mundo do servidor (suporte a múltiplos mundos)"""
     try:
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         backup_filename = f"world_backup_{timestamp}.zip"
         backup_path = os.path.join(SERVER_DIR, backup_filename)
-
+        
         with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as z:
-            # Lista de mundos para incluir no backup
-            worlds = ["world", "world_nether", "world_the_end"]
-
-            for world_name in worlds:
-                world_path = os.path.join(SERVER_DIR, world_name)
-                if os.path.exists(world_path):
-                    for root, dirs, files in os.walk(world_path):
-                        for file in files:
-                            abs_path = os.path.join(root, file)
-                            arc_path = os.path.relpath(abs_path, SERVER_DIR)
-                            z.write(abs_path, arc_path)
-
+            # Encontra todas as pastas que começam com "world"
+            world_dirs = glob.glob(os.path.join(SERVER_DIR, "world*"))
+            for world_dir in world_dirs:
+                if os.path.isdir(world_dir):
+                    world_name = os.path.basename(world_dir)
+                    # Ignora pastas temporárias ou de backup
+                    if not world_name.endswith(('_backup', '_tmp', '_old')):
+                        for root, dirs, files in os.walk(world_dir):
+                            for file in files:
+                                abs_path = os.path.join(root, file)
+                                arc_path = os.path.relpath(abs_path, SERVER_DIR)
+                                z.write(abs_path, arc_path)
         return backup_path
     except Exception as e:
         print(f"[ERRO] Backup falhou: {e}")
@@ -254,7 +222,6 @@ def backup_world(): #se isso funcionar de primeira eu troco meu nome pra Lain
 def cleanup_old_backups():
     """Remove backups antigos mantendo apenas os mais recentes"""
     try:
-        import glob
         backup_pattern = os.path.join(SERVER_DIR, "world_backup_*.zip")
         backups = glob.glob(backup_pattern)
         backups.sort(key=os.path.getmtime, reverse=True)
@@ -306,7 +273,22 @@ def start_backup_scheduler():
         print("[BACKUP] Backup automático desativado")
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    """Verifica se o arquivo é permitido e faz validações adicionais"""
+    # Verificação básica de extensão
+    if not '.' in filename:
+        return False
+        
+    ext = filename.rsplit('.', 1)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return False
+    
+    # Validações adicionais para arquivos JAR
+    if ext == 'jar':
+        # Limita tamanho de JARs para 100MB
+        # Esta verificação seria feita no upload, mas aqui garantimos segurança
+        pass
+    
+    return True
 
 # Funções da API do Playit.gg
 def get_playit_api_headers():
@@ -363,10 +345,17 @@ def get_playit_tunnel_info(tunnel_id):
 
 # Funções do agente local do Playit.gg
 def get_playit_agent_status():
-    """Verifica se o agente do Playit está rodando localmente"""
+    """Verifica se o agente do Playit está rodando localmente (multiplataforma)"""
     try:
-        result = subprocess.check_output(["pgrep", "-af", "playit"], stderr=subprocess.DEVNULL)
-        return "Online" if b"playit" in result else "Offline"
+        sistema = platform.system().lower()
+        if sistema == "windows":
+            # No Windows, usa tasklist
+            result = subprocess.check_output(["tasklist"], stderr=subprocess.DEVNULL)
+            return "Online" if b"playit" in result.lower() else "Offline"
+        else:
+            # No Linux/Mac, usa pgrep
+            result = subprocess.check_output(["pgrep", "-af", "playit"], stderr=subprocess.DEVNULL)
+            return "Online" if b"playit" in result else "Offline"
     except:
         return "Offline"
 
@@ -383,7 +372,13 @@ def start_playit_agent():
 def stop_playit_agent():
     """Para o agente do Playit.gg"""
     try:
-        subprocess.run(["pkill", "-f", "playit"], stderr=subprocess.DEVNULL)
+        sistema = platform.system().lower()
+        if sistema == "windows":
+            # No Windows, usa taskkill
+            subprocess.run(["taskkill", "/f", "/im", "playit*.exe"], stderr=subprocess.DEVNULL)
+        else:
+            # No Linux/Mac, usa pkill
+            subprocess.run(["pkill", "-f", "playit"], stderr=subprocess.DEVNULL)
         return True, "Playit.gg parado com sucesso"
     except Exception as e:
         return False, f"Erro ao parar Playit: {str(e)}"
@@ -404,85 +399,6 @@ def run_command(cmd):
     return True
 
 # --- Rotas ---
-@app.route('/config', methods=['GET', 'POST'])
-def config():
-    if not session.get('auth'):
-        return redirect(url_for('login'))
-    
-    if request.method == 'POST':
-        env_vars = {}
-        for key in request.form:
-            if request.form[key].strip():
-                env_vars[key] = request.form[key].strip()
-        
-        try:
-            write_env_file(env_vars)
-            flash("Configurações salvas com sucesso! Reinicie o painel para aplicar as mudanças.", "success")
-        except Exception as e:
-            flash(f"Erro ao salvar configurações: {e}", "error")
-        
-        return redirect(url_for('config'))
-    
-    current_env = read_env_file()
-    
-    return render_template('config.html', env_vars=current_env)
-
-@app.route('/config/generate_secret', methods=['POST'])
-def generate_secret():
-    if not session.get('auth'):
-        return redirect(url_for('login'))
-    
-    import secrets
-    import string
-    
-    # Gerar chave secreta aleatória já que provavelmente ngm vai usar uma propria
-    secret_key = ''.join(secrets.choice(string.ascii_letters + string.digits + '!@#$%^&*') for _ in range(32))
-    
-    return jsonify({'secret_key': secret_key})
-
-@app.route('/config/validate', methods=['POST'])
-def validate_config():
-    if not session.get('auth'):
-        return redirect(url_for('login'))
-    
-    validation_results = {}
-    
-    server_dir = request.json.get('SERVER_DIR', '')
-    if server_dir:
-        validation_results['SERVER_DIR'] = {
-            'exists': os.path.exists(server_dir),
-            'writable': os.access(server_dir, os.W_OK) if os.path.exists(server_dir) else False
-        }
-
-    jar_name = request.json.get('JAR_NAME', '')
-    if jar_name and server_dir:
-        jar_path = os.path.join(server_dir, jar_name)
-        validation_results['JAR_NAME'] = {
-            'exists': os.path.exists(jar_path),
-            'is_jar': jar_name.endswith('.jar')
-        }
-    
-    playit_path = request.json.get('PLAYIT_PATH', '')
-    if playit_path:
-        validation_results['PLAYIT_PATH'] = {
-            'exists': os.path.exists(playit_path),
-            'executable': os.access(playit_path, os.X_OK) if os.path.exists(playit_path) else False
-        }
-    
-    rcon_port = request.json.get('RCON_PORT', '')
-    if rcon_port:
-        try:
-            port = int(rcon_port)
-            validation_results['RCON_PORT'] = {
-                'valid_range': 1 <= port <= 65535
-            }
-        except ValueError:
-            validation_results['RCON_PORT'] = {
-                'valid_range': False
-            }
-    
-    return jsonify(validation_results)
-
 @app.route("/status_json")
 def status_json():
     global server_state
@@ -645,6 +561,17 @@ def upload_file(subpath):
         if file and file.filename:
             filename = secure_filename(file.filename)
             upload_path = get_full_path(os.path.join(subpath, filename))
+            
+            # Validação adicional para arquivos JAR
+            if filename.lower().endswith('.jar'):
+                # Verifica o tamanho do arquivo (limitar a 100MB)
+                file.seek(0, os.SEEK_END)
+                size = file.tell()
+                file.seek(0)
+                if size > 100 * 1024 * 1024:  # 100MB
+                    flash("Arquivo JAR muito grande! Limite: 100MB", "error")
+                    return redirect(url_for("file_manager", path=subpath))
+            
             file.save(upload_path)
             flash(f"Arquivo {filename} enviado com sucesso!", "success")
         return redirect(url_for("file_manager", path=subpath))
@@ -693,7 +620,7 @@ def index():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        if request.form["password"] == os.getenv("PASSWORD"):
+        if request.form["password"] == PASSWORD:
             session["auth"] = True
             flash("Login realizado com sucesso!", "success")
             return redirect("/")
@@ -769,6 +696,17 @@ def upload():
     file = request.files["file"]
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
+        
+        # Validação adicional para arquivos JAR
+        if filename.lower().endswith('.jar'):
+            # Verifica o tamanho do arquivo (limitar a 100MB)
+            file.seek(0, os.SEEK_END)
+            size = file.tell()
+            file.seek(0)
+            if size > 100 * 1024 * 1024:  # 100MB
+                flash("Arquivo JAR muito grande! Limite: 100MB", "error")
+                return redirect("/")
+        
         plugin_dir = os.path.join(SERVER_DIR, "plugins/update" if is_server_running() else "plugins")
         os.makedirs(plugin_dir, exist_ok=True)
         file.save(os.path.join(plugin_dir, filename))
@@ -786,7 +724,7 @@ def console():
     cmd = request.form.get("command")
     if cmd:
         try:
-            with MCRcon("127.0.0.1", RCON_PASSWORD, port=25575) as mcr:
+            with MCRcon(RCON_HOST, RCON_PASSWORD, port=RCON_PORT) as mcr:
                 resp = mcr.command(cmd)
                 return f"<pre>{resp}</pre>"
         except Exception as e:
@@ -885,3 +823,4 @@ if __name__ == "__main__":
     atexit.register(lambda: print("Aplicação encerrada"))
     
     app.run(host="0.0.0.0", port=5000, debug=False)
+    # teste ae, se isso funcionar de primeira, hoje tu entra na chapa, senhor dark

@@ -38,16 +38,16 @@ app.secret_key = get_env_var("SECRET_KEY", required=True)
 PASSWORD = get_env_var("PASSWORD", required=True)
 RCON_PASSWORD = get_env_var("RCON_PASSWORD", required=True)
 RCON_PORT = int(get_env_var("RCON_PORT", 25575))
+RCON_HOST = os.getenv("RCON_HOST", "127.0.0.1")
 
 # Configurações opcionais com valores padrão
 SERVER_DIR = os.path.abspath(get_env_var("SERVER_DIR", "servidor")) + "/"
 JAR_NAME = get_env_var("JAR_NAME", "server.jar")
 PLAYIT_PATH = get_env_var("PLAYIT_PATH", "./playit-agent")
 LOG_FILE = os.path.join(SERVER_DIR, "logs", "latest.log")
-ALLOWED_EXTENSIONS = {"jar", "zip", "txt", "json", "cfg", "yml", "yaml", "dat", "mcfunction", " properties", "toml", "conf"}
+ALLOWED_EXTENSIONS = {"jar", "zip", "txt", "json", "cfg", "yml", "yaml", "dat", "mcfunction", "properties", "toml", "conf"}
 FILE_ROOT = os.path.abspath(SERVER_DIR)
 status_info = {"running": False, "players": []}
-RCON_HOST = "127.0.0.1"
 
 # Configurações do Playit.gg (opcionais)
 PLAYIT_API_KEY = os.getenv("PLAYIT_API_KEY", "")
@@ -63,6 +63,20 @@ AUTO_BACKUP_KEEP = int(os.getenv("AUTO_BACKUP_KEEP", "5"))
 backup_job = None
 
 # --- Funções auxiliares ---
+def get_resource_usage():
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'memory_info', 'cpu_percent']):
+        try:
+            if 'java' in proc.info['name'].lower() and JAR_NAME in ' '.join(proc.info['cmdline']):
+                mem = proc.memory_info().rss / (1024 * 1024)  # Em MB
+                cpu = proc.cpu_percent(interval=0.5)  # Mede % do CPU
+                return {
+                    "ram_mb": round(mem, 2),
+                    "cpu_percent": round(cpu, 1)
+                }
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return {"ram_mb": 0.0, "cpu_percent": 0.0}
+
 def read_env_file():
     """Lê o arquivo .env e retorna as configurações"""
     env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
@@ -74,7 +88,6 @@ def read_env_file():
                 line = line.strip()
                 if line and not line.startswith('#') and '=' in line:
                     key, value = line.split('=', 1)
-                    # Remove aspas se existirem
                     value = value.strip('"\'')
                     env_vars[key.strip()] = value
     
@@ -84,7 +97,7 @@ def write_env_file(env_vars):
     """Escreve as configurações no arquivo .env"""
     env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
     
-    # Template do arquivo .env com comentários
+    # Se deletar isso a aba de config do .env quebra inteira
     env_template = """# Configurações do Painel Minecraft
 SECRET_KEY={SECRET_KEY}
 PASSWORD={PASSWORD}
@@ -123,13 +136,44 @@ AUTO_BACKUP_KEEP={AUTO_BACKUP_KEEP}
     with open(env_path, 'w', encoding='utf-8') as f:
         f.write(env_template.format(**defaults))
 
-def send_rcon_command(command):
+def send_rcon_command(command, timeout=10):
+    """
+    Envia comando RCON com melhor tratamento de erros e timeout
+    """
     try:
-        with MCRcon(RCON_HOST, RCON_PASSWORD, port=RCON_PORT) as mcr:
+        print(f"[DEBUG RCON] Tentando conectar em {RCON_HOST}:{RCON_PORT}")
+        print(f"[DEBUG RCON] Enviando comando: {command}")
+        
+        # Conecta ao RCON com timeout
+        with MCRcon(RCON_HOST, RCON_PASSWORD, port=RCON_PORT, timeout=timeout) as mcr:
             response = mcr.command(command)
-        return response
+            print(f"[DEBUG RCON] Resposta recebida: {response}")
+            return response
+            
+    except ConnectionRefusedError:
+        error_msg = f"Conexão recusada para {RCON_HOST}:{RCON_PORT}. Verifique se o RCON está habilitado no servidor."
+        print(f"[ERRO RCON] {error_msg}")
+        return f"Erro: {error_msg}"
+    except TimeoutError:
+        error_msg = "Timeout na conexão RCON. O servidor pode estar sobrecarregado."
+        print(f"[ERRO RCON] {error_msg}")
+        return f"Erro: {error_msg}"
     except Exception as e:
-        return f"Erro ao enviar comando: {e}"
+        error_msg = f"Erro RCON: {str(e)}"
+        print(f"[ERRO RCON] {error_msg}")
+        return f"Erro: {error_msg}"
+
+def test_rcon_connection():
+    """
+    Testa a conexão RCON sem enviar comando
+    """
+    try:
+        with MCRcon(RCON_HOST, RCON_PASSWORD, port=RCON_PORT, timeout=5) as mcr:
+            # Tenta um comando simples que sempre funciona
+            mcr.command("seed")
+        return True, "Conexão RCON OK"
+    except Exception as e:
+        return False, f"Falha na conexão RCON: {str(e)}"
 
 def check_server_status(host='127.0.0.1', port=25565):
     try:
@@ -139,17 +183,65 @@ def check_server_status(host='127.0.0.1', port=25565):
         return False
 
 def get_player_count():
+    """
+    Obtém o número de jogadores online via RCON
+    """
     try:
-        with MCRcon(RCON_HOST, RCON_PASSWORD, port=int(RCON_PORT)) as mcr:
-            response = mcr.command("list")  
-            clean_response = re.sub(r"§.", "", response)  
+        if not is_server_running():
+            return 0
+            
+        with MCRcon(RCON_HOST, RCON_PASSWORD, port=RCON_PORT, timeout=5) as mcr:
+            response = mcr.command("list")
+            print(f"[DEBUG] Resposta do comando 'list': {response}")
+            
+            # Remove códigos de cor
+            clean_response = re.sub(r"§.", "", response)
+            
+            # Diferentes formatos de resposta do comando list
             if "There are" in clean_response:
-                parts = clean_response.split()
-                count = int(parts[2])  
-                return count
+                # Formato: "There are X of a max of Y players online:"
+                match = re.search(r"There are (\d+)", clean_response)
+                if match:
+                    count = int(match.group(1))
+                    print(f"[DEBUG] Jogadores online: {count}")
+                    return count
+            elif "players online:" in clean_response.lower():
+                # Formato alternativo
+                match = re.search(r"(\d+).*players online", clean_response.lower())
+                if match:
+                    return int(match.group(1))
+            elif clean_response.strip().isdigit():
+                # Caso retorne apenas o número
+                return int(clean_response.strip())
+                
+        return 0
     except Exception as e:
-        pass  # Removido o print de erro para não poluir o painel
-    return 0
+        print(f"[DEBUG] Erro ao obter contagem de jogadores: {e}")
+        return 0
+
+def get_player_list():
+    """
+    Obtém a lista completa de jogadores online
+    """
+    try:
+        if not is_server_running():
+            return []
+            
+        with MCRcon(RCON_HOST, RCON_PASSWORD, port=RCON_PORT, timeout=5) as mcr:
+            response = mcr.command("list")
+            clean_response = re.sub(r"§.", "", response)
+            
+            # Extrai os nomes dos jogadores da resposta
+            if ":" in clean_response:
+                players_part = clean_response.split(":", 1)[1].strip()
+                if players_part:
+                    players = [p.strip() for p in players_part.split(",")]
+                    return [p for p in players if p] 
+            
+        return []
+    except Exception as e:
+        print(f"[DEBUG] Erro ao obter lista de jogadores: {e}")
+        return []
 
 def get_full_path(subpath):
     full = os.path.abspath(os.path.join(FILE_ROOT, subpath))
@@ -158,17 +250,14 @@ def get_full_path(subpath):
     return full
 
 def is_server_running():
-    """Detecta se o servidor está rodando com suporte a Fabric, Forge e Vanilla"""
     for proc in psutil.process_iter(['name', 'cmdline']):
         try:
-            if proc.info['name'] and 'java' in proc.info['name'].lower():
-                cmdline = ' '.join(proc.info['cmdline']).lower()
-                # Verifica se é o servidor correto pelo diretório e JAR
-                if (os.path.abspath(SERVER_DIR).lower() in cmdline and 
-                    JAR_NAME.lower() in cmdline):
-                    return True
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
+            name = proc.info['name']
+            cmdline = proc.info['cmdline']
+            if name and 'java' in name.lower() and JAR_NAME in ' '.join(cmdline):
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
     return False
 
 server_state = "ligado" if is_server_running() else "desligado"
@@ -219,7 +308,6 @@ def start_server():
     
     threading.Thread(target=run, daemon=True).start()
 
-# socorro
 def stop_server():
     """Para o servidor identificando o processo específico com suporte a diferentes tipos"""
     global server_state
@@ -227,7 +315,7 @@ def stop_server():
     
     # Primeiro tenta parar via RCON
     try:
-        with MCRcon(RCON_HOST, RCON_PASSWORD, port=RCON_PORT) as mcr:
+        with MCRcon(RCON_HOST, RCON_PASSWORD, port=RCON_PORT, timeout=5) as mcr:
             mcr.command("stop")
         # Espera um pouco para o servidor parar gracefulmente
         time.sleep(5)
@@ -446,21 +534,49 @@ def stop_playit_agent():
         return False, f"Erro ao parar Playit: {str(e)}"
 
 def list_players():
-    return status_info["players"]
+    return get_player_list()
 
 def read_logs():
     if os.path.exists(LOG_FILE):
         with open(LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
-            return f.read()
+            lines = f.readlines()
+            filtered = [
+                line for line in lines
+                if "RCON Listener" not in line and "RCON Client" not in line
+            ]
+            return "".join(filtered)
     return "Sem logs ainda, nya~"
 
 def run_command(cmd):
-    input_file = os.path.join(SERVER_DIR, "console_input.txt")
-    with open(input_file, "a") as f:
-        f.write(cmd + "\n")
-    return True
+    """
+    Executa comando via RCON diretamente (método melhorado)
+    """
+    return send_rcon_command(cmd)
 
 # --- Rotas ---
+@app.route("/resources")
+def resources():
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            if 'java' in proc.info['name'].lower() and JAR_NAME in ' '.join(proc.info['cmdline']).lower():
+                ram_bytes = proc.memory_info().rss
+                raw_cpu = proc.cpu_percent(interval=0.5)
+
+                ram_mb = ram_bytes / (1024 * 1024)
+                cpu_percent = min(round(raw_cpu / 5) * 5, 100)
+
+                return jsonify({
+                    "ram_mb": round(ram_mb, 2),
+                    "cpu_percent": cpu_percent
+                })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    return jsonify({
+        "ram_mb": 0,
+        "cpu_percent": 0
+    })
+
 @app.route('/config', methods=['GET', 'POST'])
 def config():
     if not session.get('auth'):
@@ -539,12 +655,6 @@ def validate_config():
 @app.route("/status_json")
 def status_json():
     global server_state
-    if is_server_running():
-        if server_state != "ligando":
-            server_state = "ligado"
-    else:
-        if server_state != "desligando":
-            server_state = "desligado"
     
     # Verificar status do Playit
     playit_agent_status = get_playit_agent_status()
@@ -556,7 +666,8 @@ def status_json():
     
     return jsonify({
         "status": server_state,
-        "players": get_player_count() if server_state == "ligado" else 0,
+        "player_count": get_player_count() if server_state == "ligado" else 0,
+        "players": get_player_list() if server_state == "ligado" else [],
         "playit_agent_status": playit_agent_status,
         "playit_tunnel_info": playit_tunnel_info
     })
@@ -566,7 +677,12 @@ def stream_logs():
     try:
         with open(LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
-        return jsonify(lines[-50:])
+        # filtro pro rcon
+        filtered = [
+            line for line in lines[-50:]
+            if "RCON Listener" not in line and "RCON Client" not in line
+        ]
+        return jsonify(filtered)
     except Exception as e:
         return jsonify([f"[Erro ao ler log]: {e}"])
 
@@ -575,17 +691,26 @@ def send_command():
     if not session.get('auth'):
         return redirect(url_for('login'))
         
-    command = request.form.get("command", "")
-    if command.strip() == "":
-        flash("Comando vazio, nyan! (>_<)")
+    command = request.form.get("command", "").strip()
+    if command == "":
+        flash("Comando vazio, nyan! (>_<)", "error")
         return redirect(url_for("logs"))
+    
+    # Verifica se o servidor está rodando
+    if not is_server_running():
+        flash("Servidor não está rodando!", "error")
+        return redirect(url_for("logs"))
+    
+    # Envia o comando via RCON
     output = send_rcon_command(command)
-    flash(f"Resultado: {output}")
+    
+    # Verifica se houve erro na execução
+    if output.startswith("Erro:"):
+        flash(f"Erro ao executar comando: {output}", "error")
+    else:
+        flash(f"Comando executado com sucesso: {output}", "success")
+    
     return redirect(url_for("logs"))
-
-@app.route("/files")
-def redirect_files():
-    return redirect("/files/")
 
 @app.route("/edit", methods=["GET", "POST"])
 def edit_file():
@@ -812,6 +937,7 @@ def status():
     return jsonify({
         "status": "online" if is_server_running() else "offline",
         "player_count": get_player_count(),
+        "players": get_player_list(),
         "playit_agent_status": playit_agent_status,
         "playit_tunnel_info": playit_tunnel_info
     })
@@ -869,12 +995,29 @@ def console():
     cmd = request.form.get("command")
     if cmd:
         try:
-            with MCRcon(RCON_HOST, RCON_PASSWORD, port=RCON_PORT) as mcr:
-                resp = mcr.command(cmd)
-                return f"<pre>{resp}</pre>"
+            output = send_rcon_command(cmd)
+            return f"<pre>{output}</pre>"
         except Exception as e:
             return f"Erro ao enviar comando: {e}"
     return "Nenhum comando enviado."
+
+@app.route("/rcon_test")
+def rcon_test():
+    """Rota para testar a conexão RCON"""
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+        
+    # Primeiro testa a conexão
+    connected, message = test_rcon_connection()
+    if not connected:
+        return f"<pre>Falha na conexão RCON: {message}</pre>"
+    
+    # Se conectou, testa um comando
+    try:
+        output = send_rcon_command("say Painel conectado com sucesso! OwO")
+        return f"<pre>Conexão RCON OK! Resposta: {output}</pre>"
+    except Exception as e:
+        return f"<pre>Erro ao enviar comando de teste: {e}</pre>"
 
 @app.route("/logs")
 def logs():
@@ -888,10 +1031,25 @@ def send():
     if not session.get('auth'):
         return redirect(url_for('login'))
         
-    cmd = request.form.get("command")
-    if cmd:
-        run_command(cmd)
-        flash("Comando enviado para o console!", "success")
+    cmd = request.form.get("command", "").strip()
+    if cmd == "":
+        flash("Comando vazio!", "error")
+        return redirect("/logs")
+    
+    # Verifica se o servidor está rodando
+    if not is_server_running():
+        flash("Servidor não está rodando!", "error")
+        return redirect("/logs")
+    
+    # Envia o comando via RCON
+    output = send_rcon_command(cmd)
+    
+    # Verifica se houve erro na execução
+    if output.startswith("Erro:"):
+        flash(f"Erro RCON: {output}", "error")
+    else:
+        flash(f"Comando executado: {output}", "success")
+        
     return redirect("/logs")
 
 # --- Rotas para Playit.gg ---
@@ -960,6 +1118,27 @@ def backup_auto_toggle():
     
     return redirect(url_for('index'))
 
+# Nova rota pra debug do RCON
+@app.route('/debug/rcon')
+def debug_rcon():
+    """Rota para debug das configurações RCON"""
+    if not session.get('auth'):
+        return redirect(url_for('login'))
+    
+    debug_info = {
+        "RCON_HOST": RCON_HOST,
+        "RCON_PORT": RCON_PORT,
+        "RCON_PASSWORD": "***" + RCON_PASSWORD[-3:] if len(RCON_PASSWORD) > 3 else "***",
+        "Server Running": is_server_running(),
+        "Server State": server_state
+    }
+    
+    # Testa conexão
+    connected, message = test_rcon_connection()
+    debug_info["RCON Connection"] = message
+    
+    return jsonify(debug_info)
+
 if __name__ == "__main__":
     # Iniciar agendador de backups quando a aplicação começar
     start_backup_scheduler()
@@ -967,5 +1146,4 @@ if __name__ == "__main__":
     # Registrar função para limpar ao sair
     atexit.register(lambda: print("Aplicação encerrada"))
     
-    app.run(host="0.0.0.0", port=5000, debug=False)
-    # teste ae, se isso funcionar de primeira, hoje tu entra na chapa, senhor dark
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=False)

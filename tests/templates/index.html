@@ -3,6 +3,64 @@
 <div class="container mx-auto px-4 py-6">
     <h1 class="text-3xl font-bold mb-6 text-center">📊 Dashboard do Servidor</h1>
     
+<!--  Monitoramento de Recursos -->
+<div id="monitoramento" class="bg-gray-800 p-4 rounded shadow mb-6 text-white">
+  <h2 class="text-2xl font-bold mb-4">📊 Monitoramento de Recursos</h2>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <!-- RAM -->
+    <div class="bg-gray-900 p-4 rounded-lg shadow">
+      <p class="text-gray-300 font-semibold mb-2">🧠 Uso de RAM</p>
+      <div class="h-4 relative w-full bg-gray-700 rounded">
+        <div id="ram-bar"
+             class="absolute h-4 bg-green-500 rounded transition-all duration-500 ease-in-out"
+             style="width: 0%"></div>
+      </div>
+      <p class="mt-2 text-sm text-gray-400">Usando <span id="ram-uso">0</span> MB</p>
+    </div>
+
+    <!-- CPU -->
+    <div class="bg-gray-900 p-4 rounded-lg shadow">
+      <p class="text-gray-300 font-semibold mb-2">⚙️ Uso de CPU</p>
+      <div class="h-4 relative w-full bg-gray-700 rounded">
+        <div id="cpu-bar"
+             class="absolute h-4 bg-yellow-500 rounded transition-all duration-500 ease-in-out"
+             style="width: 0%"></div>
+      </div>
+      <p class="mt-2 text-sm text-gray-400">Usando <span id="cpu-uso">0</span>%</p>
+    </div>
+  </div>
+</div>  
+    
+<script>
+function atualizarMonitoramento() {
+    fetch("/resources")
+        .then(res => res.json())
+        .then(data => {
+            // RAM
+            const ram = data.ram_mb;
+            const ramTotal = data.ram_total_mb || 2048; // define total (ou usa 8GB como base)
+            const ramPercent = Math.min((ram / ramTotal) * 100, 100).toFixed(1);
+
+            document.getElementById("ram-uso").textContent = ram.toFixed(1);
+            document.getElementById("ram-bar").style.width = `${ramPercent}%`;
+
+            // CPU
+            const cpu = data.cpu_percent;
+            document.getElementById("cpu-uso").textContent = cpu.toFixed(1);
+            document.getElementById("cpu-bar").style.width = `${cpu.toFixed(1)}%`;
+        })
+        .catch(() => {
+            document.getElementById("ram-uso").textContent = "Erro";
+            document.getElementById("cpu-uso").textContent = "Erro";
+        });
+}
+
+setInterval(atualizarMonitoramento, 3000);
+window.onload = atualizarMonitoramento;
+</script>
+
+
     <!-- Cards de status -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <!-- Status do Servidor -->
@@ -23,6 +81,7 @@
                 </div>
             </div>
         </div>
+        
         
         <!-- Jogadores Online -->
         <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 shadow-lg">
@@ -188,42 +247,38 @@
         fileNameSpan.textContent = input.files.length > 0 ? input.files[0].name : "Nenhum arquivo selecionado";
     }
     
-    // Atualizar status automaticamente
-    function atualizarStatus() {
-        fetch("{{ url_for('status_json') }}")
-            .then(res => res.json())
-            .then(data => {
-                // Atualizar status do servidor
-                const statusElements = document.querySelectorAll('[data-status="server"]');
-                statusElements.forEach(el => {
-                    el.className = el.className.replace(/text-\w+-\d+/, 
-                        data.status === 'ligado' ? 'text-green-400' : 
-                        data.status === 'desligado' ? 'text-red-400' : 'text-yellow-400');
-                    el.innerHTML = data.status === 'ligado' ? '🟢 Online' : 
-                                  data.status === 'desligado' ? '🔴 Offline' : 
-                                  data.status === 'ligando' ? '🟡 Iniciando' : '⚪ Parando';
-                });
-                
-                // Atualizar jogadores online
-                const playerElements = document.querySelectorAll('[data-players="count"]');
-                playerElements.forEach(el => {
-                    el.textContent = data.players;
-                });
-                
-                // Atualizar status do Playit
-                const playitElements = document.querySelectorAll('[data-playit="status"]');
-                playitElements.forEach(el => {
-                    el.className = el.className.replace(/text-\w+-\d+/, 
-                        data.playit_agent_status === 'Online' ? 'text-green-400' : 'text-red-400');
-                    el.innerHTML = data.playit_agent_status === 'Online' ? '🟢 Online' : '🔴 Offline';
-                });
-            })
-            .catch(err => {
-                console.error("Erro ao atualizar status:", err);
-            });
-    }
+
+</script>
     
-    // Atualizar status a cada 3 segundos
-    setInterval(atualizarStatus, 3000);
+<script>
+function atualizarStatus() {
+    fetch("/status_json")
+        .then(response => response.json())
+        .then(data => {
+            let statusBox = document.getElementById("status-servidor");
+            let html = `
+                <div class="p-4 rounded shadow mb-4 ${
+                    data.status === 'ligado' ? 'bg-green-800' :
+                    data.status === 'ligando' ? 'bg-yellow-600' :
+                    data.status === 'desligando' ? 'bg-gray-600' :
+                    'bg-red-800'
+                }">
+                    <p class="text-xl font-semibold">
+                        Status do Servidor: 
+                        <span class="font-bold">
+                            ${data.status === 'ligado' ? '🟢 Ligado' :
+                              data.status === 'ligando' ? '🟡 Ligando...' :
+                              data.status === 'desligando' ? '⚪ Desligando...' :
+                              '🔴 Desligado'}
+                        </span>
+                    </p>
+                    ${data.status === 'ligado' ? `<p class="mt-2">Jogadores Online: <span class="font-bold">${data.player_count}</span> 🎮</p>` : ''}
+                </div>
+            `;
+            statusBox.innerHTML = html;
+        });
+}
+setInterval(atualizarStatus, 2000);
+window.onload = atualizarStatus;
 </script>
 {% endblock %}

@@ -4,7 +4,7 @@
 A simple, fluffy 💖 and slightly miraculous ✨ web panel to manage your Minecraft server straight from your browser.  
 Built with Python + Flask, duct tape, and caffeine.
 
-[🇧🇷 Versão em português aqui!](README-ptbr.md)
+[🇧🇷 Versão em português aqui!](README.md)
 
 > "This **probably** shouldn’t work, but it does. And better than it should."  
 > — Someone who clearly didn’t test enough

@@ -1,79 +1,131 @@
-# 🌸 Minecraft panel in Flask
 
-A cute and simple web panel 💖 to manage a Minecraft server directly from your browser made with Python + Flask.
+# 🌸 Minecraft Panel in Flask
 
-> this **probably** shouldn't work, but it works. - The creator of this project
+A simple, fluffy 💖 and slightly miraculous ✨ web panel to manage your Minecraft server straight from your browser.  
+Built with Python + Flask, duct tape, and caffeine.
+
+[🇧🇷 Versão em português aqui!](README-ptbr.md)
+
+> "This **probably** shouldn’t work, but it does. And better than it should."  
+> — Someone who clearly didn’t test enough
+
+---
 
 ## ✨ Features
-- 🟢 **Start / stop the server**
-- 🎮 **Active player counter** (using RCON)
-- 📁 **File manager** (edit, download and send plugins or mods)
-- 💾 **Option to backup** the world
-- 🔍 **Logs and RCON commands** in "real time"
-- 🌐 ~~integration with playit for remote access~~
 
-## 🔜 Things to be added
-- [ ] Option to delete files (?)
-- [ ] Integrate with playit
-- [ ] Auto backup
-- [ ] Easier config
-- [ ] sex
+- 🟢 **Start / Stop the server**  
+  Because clicking buttons is cooler than typing in the terminal.
+- 🎮 **Online player counter** (via RCON)  
+  See how many friends are ignoring your server invite.
+- 📁 **File manager** (edit, upload, download files)  
+  *The true FTP experience… but with 80% less trauma.*
+- 💾 **Complete world backup**, including all dimensions  
+  Nobody wants to lose that dirt castle in the Nether.
+- 🔍 **Real-time log viewer**  
+  Spy on your server like the Mojang FBI.
+- ⚙️ **Edit the `.env` file** directly from the panel  
+  Less time in the terminal, more time breaking blocks.
+- 📊 **RAM and CPU usage monitor**  
+  Great for when your server is haunted by a buggy mod.
+- ⌨️ **Quick RCON commands**  
+  Typing `/stop` has never felt so satisfying.
+- 🎨 **Totally revamped interface**  
+  Prettier than Minecraft 1.20’s UI (no shade).
+- 🌐 ~~Playit.gg integration for remote access~~ *(in development. maybe. someday. who knows.)*
+- ✅ **Compatible with:** Forge, Fabric, Vanilla, and Paper  
+  ❌ *BungeeCord and Velocity are still grounded.*
 
+---
+
+## 🔮 Future Features
+
+- [ ] Delete files directly from the panel (no accidents, I swear!)
+- [ ] Playit.gg integration (devs, please send help)
+- [x] Automatic backups, because we make mistakes and that's ok!
+- [x] Less depressing and more intuitive settings screen
+- [ ] Dark mode (because our eyes are crying)
+- [ ] ~~sex~~ (💀 not that kind of panel, sorry)
+
+---
 
 ## 📦 Requirements
-- Python **3.9+**
-- Java (17+) installed and configured in `PATH`
-- A working minecraft server (if you already have one, move it to the folder "servidor")
-- RCON activated in `server.properties`
 
-## 🚀 Instalation
-Clone the repo:
+- Python **3.9 or higher**
+- Java (version 17+) installed and in your `PATH`
+- A Minecraft server (put it in the `servidor` folder)
+- RCON enabled in `server.properties`
+
+> Tip: use a lightweight `.jar` server like Paper or Vanilla (no heavy mods for testing)
+
+---
+
+## 🚀 Installation
+
+Clone the repository:
 ```
 git clone https://github.com/DarkOFC73/painel-minecraft-flask.git
 cd painel-minecraft-flask
 ```
-Create and activate a virtual env:
+Create and activate a virtual environment:
+```
+python -m venv venv
 
-``python -m venv venv``
+    #Windows (running a server on Windows? really?):
+    venv\Scriptsctivate
 
-``venv\Scripts\activate`` if you use windows
-
-``source venv/bin/activate`` if you are neglected by society (Linux/Mac)
-
+    #Linux/macOS:
+    source venv/bin/activate
+```
 Install the dependencies:
-
-``pip install -r requirements.txt``
-
-## ⚙️ Config
-
-Create a .env file in the root folder of the repo:
 ```
-PASSWORD=your_pass_here
-SECRET_KEY=a_secret_key
-JAR_NAME=server.jar (or whatever, needs to have .jar at the end btw)
-RCON_PASSWORD=your_rcon_pass
+pip install -r requirements.txt
+```
+
+⚙️ Configuration
+
+Create a `.env` file with these spicy contents:
+```
+SECRET_KEY=super_secret_key_generatemeplspls
+PASSWORD=admin
+SERVER_DIR=path/to/your/server
+JAR_NAME=paper.jar
+PLAYIT_PATH=./playit
+RCON_PASSWORD=nyan
 RCON_PORT=25575
+# Playit.gg Config (optional)
+PLAYIT_API_KEY=your_api_key_here
+PLAYIT_TUNNEL_ID=your_tunnel_id_here
+PLAYIT_AGENT_PATH=./playit-agent
+# Auto Backup Config
+AUTO_BACKUP_ENABLED=false
+AUTO_BACKUP_INTERVAL=3600
+AUTO_BACKUP_KEEP=5
 ```
-
-
-Be sure that the server.properties has these settings:
+Then edit your Minecraft `server.properties`:
 ```
 enable-rcon=true
-rcon.password=your_rcon_pass
+rcon.password=your_rcon_password
 rcon.port=25575
 ```
-## ▶️ Running it
-in the terminal:
+If you don’t enable RCON, **nothing** will work. Not the stop button. Not even your little gamer heart 💔
 
-``python app.py``
+▶️ Running
 
-The panel will be hosted at:
+Launch it like a pro:
+```
+python app.py
+```
+Open your browser and go to:
 
-http://127.0.0.1:5000
+    http://127.0.0.1:5000
 
+If it works, congrats. If not, congrats too — you're officially a Flask dev now. 😎
+
+---
 
 ## 📝 License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License.  
+Feel free to use it, break it, fix it, and call it your own. Just don’t blame me if it breaks.
 
-![Made%20with-Python-3776AB?logo=python&logoColor=white](https://img.shields.io/badge/Made%20with-Python-3776AB?logo=python&logoColor=white)
+Made with Python and love 💖.
